@@ -12,7 +12,7 @@ class TossMasterApp extends StatelessWidget {
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
         useMaterial3: true,
       ),
-      home: const TossMasterScene(title: 'TossMaster - ZJU CG 2024'),
+      home: const HomePage(title: 'TossMaster - ZJU CG 2024'),
     );
   }
 }

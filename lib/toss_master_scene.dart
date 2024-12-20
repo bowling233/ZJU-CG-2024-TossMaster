@@ -1,123 +1,117 @@
-import 'dart:typed_data';
-
-import 'package:opencv_dart/opencv_dart.dart' as cv;
+import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/foundation.dart' show kIsWeb;
-import 'package:permission_handler/permission_handler.dart';
-import 'opengl_scene.dart';
+import 'package:gal/gal.dart';
+import 'dart:developer' as developer;
 
-class TossMasterScene extends StatefulWidget {
-  const TossMasterScene({super.key, required this.title});
+class HomePage extends StatefulWidget {
+  const HomePage({super.key, required this.title});
 
   final String title;
 
   @override
-  State<TossMasterScene> createState() => _TossMasterSceneState();
+  State<HomePage> createState() => _HomePageState();
 }
 
-class _TossMasterSceneState extends State<TossMasterScene> {
-  int width = -1;
-  int height = -1;
-  double fps = -1;
-  String backend = "unknown";
-  final vc = cv.VideoCapture.empty();
-  final vw = cv.VideoWriter.empty();
-  bool isStreaming = false;
+class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
+  List<CameraDescription> cameras = [];
+  CameraController? cameraController;
+  double size = 0;
 
-  Uint8List? _wroteFrame;
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    super.didChangeAppLifecycleState(state);
+    if (cameraController == null ||
+        cameraController?.value.isInitialized == false) {
+      return;
+    }
+
+    if (state == AppLifecycleState.inactive) {
+      cameraController?.dispose();
+    } else if (state == AppLifecycleState.resumed) {
+      _setupCameraController();
+    }
+  }
 
   @override
   void initState() {
     super.initState();
-    requestPermission();
-  }
-
-  void requestPermission() async {
-    // Check if the platform is not web, as web has no permissions
-    if (!kIsWeb) {
-      // Request storage permission
-      var status = await Permission.storage.status;
-      if (!status.isGranted) {
-        await Permission.storage.request();
-      }
-
-      // Request camera permission
-      var cameraStatus = await Permission.camera.status;
-      if (!cameraStatus.isGranted) {
-        await Permission.camera.request();
-      }
-    }
-  }
-
-  Future<void> startStreaming() async {
-    while (isStreaming) {
-      final (success, frame) = vc.read();
-      if (success) {
-        final (encoded, bytes) = cv.imencode(".png", frame);
-        frame.dispose();
-        if (encoded) {
-          setState(() {
-            _wroteFrame = bytes;
-          });
-        } else {
-          debugPrint("Frame encoding failed.");
-        }
-      } else {
-        debugPrint("Failed to read frame from camera.");
-      }
-      await Future.delayed(const Duration(milliseconds: 10));
-    }
+    _setupCameraController();
   }
 
   @override
   Widget build(BuildContext context) {
+    size = MediaQuery.sizeOf(context).width;
+    developer.log('size: $size');
     return Scaffold(
       appBar: AppBar(
         backgroundColor: Theme.of(context).colorScheme.inversePrimary,
         title: Text(widget.title),
       ),
-      body: Center(
+      body: _buildUI(),
+    );
+  }
+
+  Widget _buildUI() {
+    if (cameraController == null ||
+        cameraController?.value.isInitialized == false) {
+      return const Center(
+        child: CircularProgressIndicator(),
+      );
+    }
+    return SafeArea(
+      child: SizedBox.expand(
         child: Column(
-          mainAxisAlignment: MainAxisAlignment.start,
-          children: <Widget>[
-            Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                ElevatedButton(
-                  onPressed: () async {
-                    await vc.openIndexAsync(0);
-                    setState(() {
-                      width = vc.get(cv.CAP_PROP_FRAME_WIDTH).toInt();
-                      height = vc.get(cv.CAP_PROP_FRAME_HEIGHT).toInt();
-                      fps = vc.get(cv.CAP_PROP_FPS);
-                      backend = vc.getBackendName();
-                    });
-                  },
-                  child: const Text("Start Camera"),
-                )
-              ],
+          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            ClipRRect(
+              child: SizedOverflowBox(
+                size: Size(size, size),
+                alignment: Alignment.center,
+                child: CameraPreview(
+                  cameraController!,
+                ),
+              ),
             ),
-            Text(
-                "width: $width, height: $height, fps: $fps, backend: $backend"),
-            ElevatedButton(
-              child: const Text("Start"),
+            IconButton(
               onPressed: () async {
-                if (!isStreaming) {
-                  setState(() {
-                    isStreaming = true;
-                  });
-                  startStreaming();
-                } else {
-                  setState(() {
-                    isStreaming = false;
-                  });
-                }
+                XFile picture = await cameraController!.takePicture();
+                Gal.putImage(
+                  picture.path,
+                );
               },
-            ),
-            const OpenGLScene(),
+              iconSize: 100,
+              icon: const Icon(
+                Icons.camera,
+                color: Colors.red,
+              ),
+            )
           ],
         ),
       ),
     );
+  }
+
+  Future<void> _setupCameraController() async {
+    List<CameraDescription> cameras = await availableCameras();
+    if (cameras.isNotEmpty) {
+      setState(() {
+        cameras = cameras;
+        cameraController = CameraController(
+          cameras.first,
+          ResolutionPreset.high,
+        );
+      });
+      cameraController?.initialize().then((_) {
+        if (!mounted) {
+          return;
+        }
+        setState(() {});
+      }).catchError(
+        (Object e) {
+          developer.log(e.toString());
+        },
+      );
+    }
   }
 }

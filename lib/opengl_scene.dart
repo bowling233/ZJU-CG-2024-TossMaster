@@ -5,9 +5,11 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import 'package:flutter_gl/flutter_gl.dart';
+import 'package:flutter_gl/openGL/opengl/opengl_es_bindings/opengl_es_bindings.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:opencv_dart/opencv_dart.dart' as cv;
 import 'dart:developer' as developer;
+import 'package:image/image.dart' as img;
 
 class OpenGLScene extends StatefulWidget {
   const OpenGLScene({super.key});
@@ -43,23 +45,33 @@ class _OpenGLSceneState extends State<OpenGLScene> {
   int vcWeight = -1;
   double vcFps = -1;
   String vcBackend = "unknown";
+  double vcRotation = -1;
   final vc = cv.VideoCapture.empty();
   // Camera Frame
   dynamic vcTexture;
 
+  // ********************
+  // Init State
+  // ********************
   @override
   void initState() {
     super.initState();
 
     // setup OpenCV VideoCapture
     requestPermission();
-    vc.openIndex(0);
-    vcWidth = vc.get(cv.CAP_PROP_FRAME_WIDTH).toInt();
-    vcWeight = vc.get(cv.CAP_PROP_FRAME_HEIGHT).toInt();
-    vcFps = vc.get(cv.CAP_PROP_FPS);
-    vcBackend = vc.getBackendName();
-
-    developer.log(" init state..... ");
+    // vc.openIndex(0);
+    // // OpenCV supported properties on android see https://github.com/rainyl/opencv_dart/issues/159#issuecomment-2238065384
+    // vc.set(cv.CAP_PROP_FRAME_WIDTH, 1024.0);
+    // vc.set(cv.CAP_PROP_FRAME_HEIGHT, 768.0);
+    // vcWidth = vc.get(cv.CAP_PROP_FRAME_WIDTH).toInt();
+    // vcWeight = vc.get(cv.CAP_PROP_FRAME_HEIGHT).toInt();
+    // vcFps = vc.get(cv.CAP_PROP_FPS);
+    // vcBackend = vc.getBackendName();
+    // vcRotation = vc.get(cv.CAP_PROP_ORIENTATION_META);
+    // // debug: show camera information
+    // developer.log("vcWidth: $vcWidth vcWeight: $vcWeight vcFps: $vcFps vcBackend: $vcBackend");
+    // developer.log("vcRotation: $vcRotation");
+    // developer.log(" init state..... ");
   }
 
   void requestPermission() async {
@@ -70,6 +82,10 @@ class _OpenGLSceneState extends State<OpenGLScene> {
       }
     }
   }
+
+  // ********************
+  // Build (Prepare)
+  // ********************
 
   // Platform messages are asynchronous, so we initialize in an async method.
   Future<void> initPlatformState() async {
@@ -162,14 +178,6 @@ class _OpenGLSceneState extends State<OpenGLScene> {
     );
   }
 
-  animate() {
-    render();
-
-    Future.delayed(const Duration(milliseconds: 40), () {
-      animate();
-    });
-  }
-
   setupDefaultFBO() {
     final gl = flutterGlPlugin.gl;
     int glWidth = (width * dpr).toInt();
@@ -188,55 +196,8 @@ class _OpenGLSceneState extends State<OpenGLScene> {
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
 
     gl.bindFramebuffer(gl.FRAMEBUFFER, defaultFramebuffer);
-    gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0,
-        gl.TEXTURE_2D, defaultFramebufferTexture, 0);
-  }
-
-  clickRender() {
-    developer.log(" click render ... ");
-    render();
-  }
-
-
-  renderBackground(cv.Mat frame){
-
-  }
-
-  render() {
-    /**
-     * OpenGL Part
-     */
-    final gl = flutterGlPlugin.gl;
-    gl.clearColor(0.0, 0.0, 0.0, 0.0);
-    gl.clearDepth(1);
-    gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
-
-    // draw background
-
-    gl.viewport(0, 0, (width * dpr).toInt(), (height * dpr).toInt());
-
-    // _gl.bindVertexArray(_vao);
-    // _gl.useProgram(glProgram);
-    gl.drawArrays(gl.TRIANGLES, 0, n);
-
-    developer.log(" render n: $n ");
-
-    /**
-     * OpenCV Part
-     */
-    // Read frame from camera
-    final (success, frame) = vc.read();
-    if (!success) {
-      developer.log("Failed to read frame from camera.");
-      return;
-    }
-    // Identify the markers
-
-    gl.finish();
-
-    if (!kIsWeb) {
-      flutterGlPlugin.updateTexture(sourceTexture);
-    }
+    gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D,
+        defaultFramebufferTexture, 0);
   }
 
   prepare() {
@@ -362,5 +323,85 @@ void main() {
       return;
     }
     return shader;
+  }
+
+  // ********************
+  // Animate
+  // ********************
+
+  animate() {
+    render();
+
+    Future.delayed(const Duration(milliseconds: 33), () {
+      animate();
+    });
+  }
+
+  renderBackground(cv.Mat frame) {
+    final gl = flutterGlPlugin.gl;
+    gl.bindTexture(gl.TEXTURE_2D, vcTexture);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+
+    // debug: print frame properties
+    developer.log("frame: ${frame.cols}x${frame.rows} ${frame.channels}");
+
+    final (s, bytes) = cv.imencode(".png", frame);
+    frame.dispose();
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, frame.cols, frame.rows, 0,
+        gl.RGBA, gl.UNSIGNED_BYTE, bytes);
+    gl.begin(GL_QUADS);
+    gl.texCoord2f(0.0, 0.0);gl.Vertex2f(-1.0, -1.0);
+    gl.texCoord2f(1.0, 0.0);gl.Vertex2f(1.0, -1.0);
+    gl.texCoord2f(1.0, 1.0);gl.Vertex2f(1.0, 1.0);
+    gl.texCoord2f(0.0, 1.0);gl.Vertex2f(-1.0, 1.0);
+    gl.end();
+  }
+
+  renderOverlay(){
+
+  }
+
+  render() {
+    /**
+     * OpenCV Part
+     */
+    // Read frame from camera
+    final (success, frame) = vc.read();
+    if (!success) {
+      developer.log("Failed to read frame from camera.");
+      return;
+    }
+    // Identify the markers
+    // get camera information
+
+    /**
+     * OpenGL Part
+     */
+    final gl = flutterGlPlugin.gl;
+    gl.clearColor(0.0, 0.0, 0.0, 0.0);
+    gl.clearDepth(1);
+    gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+
+    // draw background
+    renderBackground(frame);
+
+    gl.viewport(0, 0, (width * dpr).toInt(), (height * dpr).toInt());
+
+    // _gl.bindVertexArray(_vao);
+    // _gl.useProgram(glProgram);
+    gl.drawArrays(gl.TRIANGLES, 0, n);
+
+    // draw overlay scene
+
+    developer.log(" render n: $n ");
+
+    gl.finish();
+
+    if (!kIsWeb) {
+      flutterGlPlugin.updateTexture(sourceTexture);
+    }
   }
 }
