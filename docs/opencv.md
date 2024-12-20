@@ -46,3 +46,21 @@ if (s) {
         }
 }
 ```
+
+后来因为 OpenCV VideoCapture 仅能输出灰度图像而放弃。
+
+### 使用 camera 获得图像流
+
+- 参考 [](https://medium.com/kbtg-life/real-time-machine-learning-with-flutter-camera-bbcf1b5c3193) 获得图像流
+- 参考 [](https://medium.com/flutter-taipei/flutter-%E5%B0%87%E7%9B%B8%E6%A9%9F%E7%95%AB%E9%9D%A2%E4%B8%80%E5%B0%8F%E9%83%A8%E5%88%86%E5%81%9A%E8%BE%A8%E8%AD%98-8247e9372c52) 对图像进行裁切处理
+- 上面两个参考资料都引用了 [](https://gist.github.com/Alby-o/fe87e35bc21d534c8220aed7df028e03) 的转换代码。
+
+目前代码中，在 ImageStream 内执行图像格式转换，安卓上格式为 yuv420。转换函数：
+
+- 首先构造空白图片
+- 然后抽取 yuv420 数据
+- 最终对空白图片中的每个像素 `wh`，设置其 RGB 值。
+
+所得的 image，我们直接抽取 getBytes 得到 OpenGL 所需的 RGB 数据。
+
+处理图片大小时还遇到了 Device Pixel Ratio 的问题，暂时不知道需要做什么。反正 FBO 是按物理像素乘 DPR 建立的。https://stackoverflow.com/questions/8785643/what-exactly-is-device-pixel-ratio

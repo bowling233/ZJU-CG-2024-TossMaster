@@ -96,3 +96,5 @@ fun drawTexture(
 ### 纹理
 
 关于纹理的几个概念辨析，参考 [Terminology: texture target vs texture unit vs texture image unit, etc... help! - OpenGL / OpenGL: Basic Coding - Khronos Forums](https://community.khronos.org/t/terminology-texture-target-vs-texture-unit-vs-texture-image-unit-etc-help/105441)
+
+
