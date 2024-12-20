@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
-import './MyApp.dart';
+import 'toss_master_app.dart';
 
 void main() {
-  runApp(MyApp());
+  runApp(const TossMasterApp());
 }
