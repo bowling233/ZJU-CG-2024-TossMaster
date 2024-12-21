@@ -97,4 +97,16 @@ fun drawTexture(
 
 关于纹理的几个概念辨析，参考 [Terminology: texture target vs texture unit vs texture image unit, etc... help! - OpenGL / OpenGL: Basic Coding - Khronos Forums](https://community.khronos.org/t/terminology-texture-target-vs-texture-unit-vs-texture-image-unit-etc-help/105441)
 
+### 数据类型
 
+在 Dart 中重新实现之前利用的所有 OpenGL 框架。现在我们没有 glm 等包装，基本是摸索着 flutter_gl 源码写的。
+
+为了与 C 实现绑定很多数据类型需要依赖 dart:typed_data 包。
+
+首先 glBufferData 的绑定可以接受 NativeArray 和一些 List 的转换。幸运的是接受 List<double>，我们姑且采用 dart 原生的方法做。
+
+线代采用 https://pub.dev/packages/matrices 包辅助实现。
+
+幸运地在准备重新实现 glm 时发现了 google 的向量库。
+
+- vector_math 提供 2-4 维的完备运算

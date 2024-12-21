@@ -1,21 +1,20 @@
-import 'package:flutter_gl/flutter_gl.dart';
 import 'package:image/image.dart' as imglib;
 import 'package:camera/camera.dart';
 import 'dart:developer' as developer;
 
-makeShader(gl, src, type) {
-  var shader = gl.createShader(type);
-  gl.shaderSource(shader, src);
-  gl.compileShader(shader);
-  var res = gl.getShaderParameter(shader, gl.COMPILE_STATUS);
-  if (res == 0 || res == false) {
-    developer.log("Error compiling shader: ${gl.getShaderInfoLog(shader)}");
-    return;
-  }
-  return shader;
-}
-
 initShaders(gl, vsSource, fsSource) {
+  makeShader(gl, src, type) {
+    var shader = gl.createShader(type);
+    gl.shaderSource(shader, src);
+    gl.compileShader(shader);
+    var res = gl.getShaderParameter(shader, gl.COMPILE_STATUS);
+    if (res == 0 || res == false) {
+      developer.log("Error compiling shader: ${gl.getShaderInfoLog(shader)}");
+      return;
+    }
+    return shader;
+  }
+
   // Compile shaders
   var vertexShader = makeShader(gl, vsSource, gl.VERTEX_SHADER);
   var fragmentShader = makeShader(gl, fsSource, gl.FRAGMENT_SHADER);
@@ -33,9 +32,6 @@ initShaders(gl, vsSource, fsSource) {
     developer.log("Unable to initialize the shader program");
     return null;
   }
-
-  // Use program
-  // gl.useProgram(glProgram);
 
   return glProgram;
 }

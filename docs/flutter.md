@@ -1,6 +1,74 @@
 # Flutter
 
-## Dart
+## Dart 语言
+
+在阅读 Flutter 框架前，先了解 Dart 语言。最好的入门教程是官方教程。
+
+个人还是不太熟悉偏函数式的语言，简单记一些笔记：
+
+### 函数
+
+语法糖 `=>` 用于单语句函数。
+
+```dart
+flybyObjects.where((name) => name.contains('turn')).forEach(print);
+```
+
+中间的函数参数为 `name`，返回值为 `name.contains('turn')`，均为类型推断。
+
+### 变量
+
+- `var` 由初值推断类型
+- `Object` 和 `dynamic`，dynamic 将在运行时检查类型。
+- 空安全：防止空指针异常，在访问数据和调用时都要考虑。
+    - 声明类型时使用 `?` 允许为空。此后访问时使用 `?.` 避免空指针异常。
+    - 不可空必须初始化，可空默认为 `null`。
+    - `late` 延迟初始化，不可空，初次访问前必须初始化。用于**编程者确定**变量在访问前已经初始化。否则容易触发运行时异常。
+    - `final` 只能赋值一次，`const` 是编译时常量。
+- `enum` 枚举，可以当作类一样写，有构造函数，但成员全 `final`。
+
+一些新的运算符用到再查。
+
+### 类
+
+所有类型都是对象，包括基本类型。
+
+- getter 方法：用于只读但并不是不可变量的属性：`int get age => _age;`
+- 命名构造函数 `Point.origin(this.x, this.y);`
+- mixin 用于多继承共享代码，理解为公用接口。
+- abstract 抽象类，需要 `implements` 实现。
+
+最最最离谱的来了，`_` 开头的变量对于 library 是私有的，没有关键字。
+
+内置类型，C++ 中的 Vector 在这里是 List，更类似数组。
+
+- `record` 简单匿名聚合类，多个东西用括号括起就行，比如 `(int, int) swap ((int, int) record)`。有位置和命名参数。有趣的是名称是 Record 的一部分，名称不同类型不同。
+- `List []`，`{}` 默认为 Map 如 `Map<String, String>{}`，`Set` 需要显式 `<String>{}`。
+- Spread 操作符 `...`，`[...list1, ...list2]` 方便插入多个值。
+
+类型：
+
+- 成员称为 instance variable，非空的必须初始化。
+
+
+
+### 异步
+
+- `async`
+
+### 控制流
+
+- 异常与 C++ 类似。
+
+### 库
+
+每个 dart 文件就是一个库。
+
+- 内置：`dart:`
+- 第三方：`package:`
+- 本地：URL。
+
+## Flutter 框架
 
 参考 [《Flutter 实战·第二版》](https://book.flutterchina.club/)
 

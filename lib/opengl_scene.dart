@@ -146,9 +146,6 @@ class _OpenGLSceneState extends State<OpenGLScene> with WidgetsBindingObserver {
     gl.vertexAttribPointer(1, 2, gl.FLOAT, false,
         5 * Float32List.bytesPerElement, 3 * Float32List.bytesPerElement);
     gl.enableVertexAttribArray(1);
-    // 释放绑定
-    gl.bindBuffer(gl.ARRAY_BUFFER, null);
-    gl.bindVertexArray(null);
   }
 
   renderBackground() {
@@ -187,8 +184,8 @@ class _OpenGLSceneState extends State<OpenGLScene> with WidgetsBindingObserver {
     var vs = """#version $version
 #define attribute in
 #define varying out
-attribute vec3 a_Position;
-// layout (location = 0) in vec3 a_Position;
+// attribute vec3 a_Position;
+layout (location = 0) in vec3 a_Position;
 void main() {
     gl_Position = vec4(a_Position, 1.0);
 }
@@ -208,7 +205,6 @@ void main() {
       return;
     }
     // 顶点数据
-    var dim = 3;
     var vertices = Float32Array.fromList([
       -0.5, -0.5, 0, // Vertice #2
       0.5, -0.5, 0, // Vertice #3
@@ -228,14 +224,17 @@ void main() {
       gl.bufferData(
           gl.ARRAY_BUFFER, vertices.lengthInBytes, vertices, gl.STATIC_DRAW);
     }
-    var aPosition = gl.getAttribLocation(sceneProgram, 'a_Position');
-    if (aPosition < 0) {
-      developer.log('Failed to get the storage location of a_Position');
-      return -1;
-    }
+    // var aPosition = gl.getAttribLocation(sceneProgram, 'a_Position');
+    // if (aPosition < 0) {
+    //   developer.log('Failed to get the storage location of a_Position');
+    //   return -1;
+    // }
+    // gl.vertexAttribPointer(
+    //     aPosition, 3, gl.FLOAT, false, Float32List.bytesPerElement * 3, 0);
+    // gl.enableVertexAttribArray(aPosition);
     gl.vertexAttribPointer(
-        aPosition, dim, gl.FLOAT, false, Float32List.bytesPerElement * 3, 0);
-    gl.enableVertexAttribArray(aPosition);
+        0, 3, gl.FLOAT, false, Float32List.bytesPerElement * 3, 0);
+    gl.enableVertexAttribArray(0);
   }
 
   renderScene() {
