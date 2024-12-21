@@ -1,6 +1,109 @@
+import 'package:flutter/services.dart' show rootBundle;
 import 'package:image/image.dart' as imglib;
 import 'package:camera/camera.dart';
 import 'dart:developer' as developer;
+
+// *********************************
+// from C
+// *********************************
+
+bool checkOpenGLError(gl) {
+  bool foundError = false;
+  // glGetError() → int
+  int glErr = gl.getError();
+  while (glErr != gl.NO_ERROR) {
+    developer.log("OpenGL Error: $glErr");
+    foundError = true;
+    glErr = gl.getError();
+  }
+  return foundError;
+}
+
+void printShaderLog(gl, int shader) {
+  // https://pub.dev/documentation/flutter_gl/latest/openGL_opengl_OpenGLContextES/OpenGLContextES/getShaderInfoLog.html
+  String log = gl.getShaderInfoLog(shader);
+  developer.log("Shader log: $log");
+}
+
+int prepareShader(gl, int shaderType, String shaderSrc) {
+  int shaderCompiled = 0;
+  // glCreateShader(int type) → int
+  int shaderRef = gl.createShader(shaderType);
+  if (shaderRef == 0 || shaderRef == gl.INVALID_ENUM) {
+    developer.log("Error creating shader");
+    return 0;
+  }
+  // glShaderSource(int shader, int count, Pointer<Pointer<Int8>> string, Pointer<Int32> length) → void
+  /**
+   * void shaderSource(v0, String shaderSource) {
+  var sourceString = shaderSource.toNativeUtf8();
+  var arrayPointer = calloc<Pointer<Int8>>();
+  arrayPointer.value = Pointer.fromAddress(sourceString.address);
+  gl.glShaderSource(v0, 1, arrayPointer, nullptr);
+  calloc.free(arrayPointer);
+  calloc.free(sourceString);
+}
+   */
+  gl.shaderSource(shaderRef, shaderSrc);
+  // glCompileShader(int shader) → void
+  gl.compileShader(shaderRef);
+  checkOpenGLError(gl);
+  // glGetShaderiv(int shader, int pname, Pointer<Int32> params) → void
+/**
+ * int getShaderParameter(v0, v1) {
+  var _pointer = calloc<Int32>();
+  gl.glGetShaderiv(v0, v1, _pointer);
+
+  final _v = _pointer.value;
+  calloc.free(_pointer);
+
+  return _v;
+}
+ */
+  shaderCompiled = gl.getShaderParameter(shaderRef, gl.COMPILE_STATUS);
+  if (shaderCompiled != gl.TRUE) {
+    if (shaderType == gl.VERTEX_SHADER) {
+      developer.log("Vertex ");
+    } else if (shaderType == gl.FRAGMENT_SHADER) {
+      developer.log("Fragment ");
+    } else {
+      developer.log("Unknown ");
+    }
+    developer.log("shader compilation error for shader: $shaderSrc");
+    printShaderLog(gl, shaderRef);
+  }
+  return shaderRef;
+}
+
+void printProgramLog(gl, int program) {
+  String log = gl.getProgramInfoLog(program);
+  developer.log("Program log: $log");
+}
+
+int finalizeShaderProgram(gl, int sprogram) {
+  int linked = 0;
+  gl.linkProgram(sprogram);
+  linked = gl.getProgramParameter(sprogram, gl.LINK_STATUS);
+  if (linked != gl.TRUE) {
+    developer.log("Error linking shader program");
+    printProgramLog(gl, sprogram);
+  }
+  return sprogram;
+}
+
+int createShaderProgram(gl, String vp, String fp) {
+  int vShader = prepareShader(gl, gl.VERTEX_SHADER, vp);
+  int fShader = prepareShader(gl, gl.FRAGMENT_SHADER, fp);
+  int vfprogram = gl.createProgram();
+  gl.attachShader(vfprogram, vShader);
+  gl.attachShader(vfprogram, fShader);
+  finalizeShaderProgram(gl, vfprogram);
+  return vfprogram;
+}
+
+// *********************************
+// from C done
+// *********************************
 
 initShaders(gl, vsSource, fsSource) {
   makeShader(gl, src, type) {
