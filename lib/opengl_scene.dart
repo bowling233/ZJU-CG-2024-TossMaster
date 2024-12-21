@@ -44,12 +44,13 @@ class OpenGLScene extends StatefulWidget {
 
 class _OpenGLSceneState extends State<OpenGLScene> with WidgetsBindingObserver {
   // ***********************
-  // Camera Part
+  // 相机数据及其参数
   // ***********************
   List<CameraDescription> cameras = [];
   CameraController? cameraController;
   late Throttler throttler; // Throttler to limit camera frame rate
   NativeUint8Array? cameraData; // 背景纹理数据
+  double fov = 45.0;
 
   // ***********************
   // Camera Part
@@ -79,7 +80,6 @@ class _OpenGLSceneState extends State<OpenGLScene> with WidgetsBindingObserver {
   late int sceneProgram;
   late vm.Vector3 cameraPos, cameraFront, cameraUp;
   late vm.Matrix4 pMat;
-
   sphere.Sphere mySphere = sphere.Sphere();
 
   int t = DateTime.now().millisecondsSinceEpoch;
@@ -115,7 +115,7 @@ class _OpenGLSceneState extends State<OpenGLScene> with WidgetsBindingObserver {
         color = texture(bgTexture, TexCoord);
     }
     """;
-    bgProgram = initShaders(gl, vs, fs);
+    bgProgram = createShaderProgram(gl, vs, fs);
     // 顶点数据
     // 四个顶点和每个顶点的纹理坐标
     var vertices = Float32Array.fromList([
@@ -173,6 +173,9 @@ class _OpenGLSceneState extends State<OpenGLScene> with WidgetsBindingObserver {
   // 场景
   prepareScene() {
     final gl = flutterGlPlugin.gl;
+    // **********
+    // 顶点
+    // **********
     List<int> ind = mySphere.getIndices();
     List<vm.Vector3> vert = mySphere.getVertices();
     List<vm.Vector2> tex = mySphere.getTexCoords();
@@ -211,47 +214,104 @@ class _OpenGLSceneState extends State<OpenGLScene> with WidgetsBindingObserver {
     gl.bindBuffer(gl.ARRAY_BUFFER, sceneVbo[2]);
     gl.bufferData(gl.ARRAY_BUFFER, nvalues.length * Float32List.bytesPerElement,
         Float32List.fromList(nvalues), gl.STATIC_DRAW);
+
+    // **********
+    // 着色器
+    // **********
+    String version = "300 es";
+    if (!kIsWeb) {
+      if (Platform.isMacOS || Platform.isWindows) {
+        version = "150";
+      }
+    }
+    var vs = """#version $version
+
+layout (location = 0) in vec3 position;
+layout (location = 1) in vec2 tex_coord;
+out vec2 tc;
+
+uniform mat4 mv_matrix;
+uniform mat4 proj_matrix;
+//layout (binding=0) uniform sampler2D s;
+
+void main(void)
+{	gl_Position = proj_matrix * mv_matrix * vec4(position,1.0);
+	//tc = tex_coord;
+}
+""";
+
+    var fs = """#version $version
+
+in vec2 tc;
+out vec4 color;
+
+uniform mat4 mv_matrix;
+uniform mat4 proj_matrix;
+layout (binding=0) uniform sampler2D s;
+
+void main(void)
+{	//color = texture(s,tc);
+  color = vec4(1.0, 0.0, 0.0, 1.0);
+}
+""";
+
+    sceneProgram = createShaderProgram(gl, vs, fs);
+
+    // **********
+    // 相机
+    // **********
+    cameraPos = vm.Vector3(0.0, 0.0, 12.0);
+    cameraFront = vm.Vector3(0.0, 0.0, -1.0);
+    cameraUp = vm.Vector3(0.0, 1.0, 0.0);
   }
 
   renderScene() {
     final gl = flutterGlPlugin.gl;
     gl.useProgram(sceneProgram);
+
+    var mvLoc = gl.getUniformLocation(sceneProgram, "mv_matrix");
+    var projLoc = gl.getUniformLocation(sceneProgram, "proj_matrix");
+
+    pMat =
+        vm.makePerspectiveMatrix(vm.radians(fov), width / height, 0.1, 1000.0);
+    var vMat = vm.makeViewMatrix(cameraPos, cameraPos + cameraFront, cameraUp);
+    var mMat = vm.Matrix4.identity();
+    var mvMat = vMat * mMat;
+    gl.uniformMatrix4fv(mvLoc, false, mvMat.storage);
+    gl.uniformMatrix4fv(projLoc, false, pMat.storage);
+
     gl.bindVertexArray(sceneVao);
-    gl.drawArrays(gl.TRIANGLES, 0, 3);
+    gl.vertexAttribPointer(0, 3, gl.FLOAT, false, 0, 0);
+    gl.enableVertexAttribArray(0);
+    gl.bindBuffer(gl.ARRAY_BUFFER, sceneVbo[1]);
+    gl.enableVertexAttribArray(1);
+    gl.vertexAttribPointer(1, 2, gl.FLOAT, false, 0, 0);
+    gl.bindBuffer(gl.ARRAY_BUFFER, sceneVbo[2]);
+    gl.enableVertexAttribArray(2);
+    gl.vertexAttribPointer(2, 3, gl.FLOAT, false, 0, 0);
+
+    gl.drawArrays(gl.TRIANGLES, 0, mySphere.getNumIndices());
   }
 
   render() {
-    /**
-     * OpenCV Part
-     */
-    // Read frame from camera
-    // Identify the markers
-    // get camera information
-
-    /**
-     * OpenGL Part
-     */
     final gl = flutterGlPlugin.gl;
+    // 清理
     int current = DateTime.now().millisecondsSinceEpoch;
     gl.viewport(0, 0, (width * dpr).toInt(), (height * dpr).toInt());
     num blue = sin((current - t) / 500);
-    // Clear canvas
-    gl.clearColor(1.0, 0.0, blue, 1.0);
-    gl.clear(gl.COLOR_BUFFER_BIT);
     // gl.clearColor(0.0, 0.0, 0.0, 0.0);
-    // gl.clearDepth(1);
-    // gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+    gl.clearColor(1.0, 0.0, blue, 1.0);
+    gl.clearDepth(1);
+    gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
 
-    // draw background
+    // 绘制
     if (cameraData != null) {
       renderBackground();
     }
+    renderScene();
 
-    // draw scene
-    // renderScene();
-
+    // 上屏
     gl.finish();
-
     if (!kIsWeb) {
       flutterGlPlugin.updateTexture(sourceTexture);
     }
