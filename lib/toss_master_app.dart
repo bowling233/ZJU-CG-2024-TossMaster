@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'homepage.dart';
+import 'toss_master_home.dart';
 
 class TossMasterApp extends StatelessWidget {
   const TossMasterApp({super.key});
@@ -12,7 +12,7 @@ class TossMasterApp extends StatelessWidget {
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
         useMaterial3: true,
       ),
-      home: const HomePage(title: 'TossMaster - ZJU CG 2024'),
+      home: const TossMasterHome(title: 'TossMaster - ZJU CG 2024'),
     );
   }
 }

@@ -1,4 +1,3 @@
-import 'package:flutter/services.dart' show rootBundle;
 import 'package:image/image.dart' as imglib;
 import 'package:camera/camera.dart';
 import 'dart:developer' as developer;

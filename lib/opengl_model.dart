@@ -1,6 +1,16 @@
 import 'dart:io';
 import 'package:vector_math/vector_math.dart';
 
+// 场景中的模型
+class SceneModel{
+  // 模型库索引
+  int index;
+  // 模型矩阵
+  Matrix4 modelMatrix;
+
+  SceneModel(this.index, this.modelMatrix);
+}
+
 class ImportedModel {
   final int numVertices;
   final List<Vector3> vertices;
