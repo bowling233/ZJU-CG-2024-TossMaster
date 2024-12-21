@@ -3,7 +3,6 @@ import 'opengl_scene.dart';
 import 'control_widget.dart';
 import 'opengl_model.dart';
 import 'package:file_picker/file_picker.dart';
-import 'toss_master_state.dart';
 import 'package:provider/provider.dart';
 
 class TossMasterHome extends StatefulWidget {
@@ -91,17 +90,14 @@ class _TossMasterHomeState extends State<TossMasterHome> {
         backgroundColor: Theme.of(context).colorScheme.inversePrimary,
         title: Text(widget.title),
       ),
-      body: Center(
-        child: ChangeNotifierProvider(
-          create: (context) => TossMasterState(),
-          child: const Column(
+      body: const Center(
+          child: Column(
             mainAxisAlignment: MainAxisAlignment.start,
             children: <Widget>[
               OpenGLScene(),
-              //ControlWidget(),
+              ControlWidget(),
             ],
           ),
-        ),
       ),
     );
   }
