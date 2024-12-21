@@ -32,14 +32,12 @@ class _OpenGLSceneState extends State<OpenGLScene> with WidgetsBindingObserver {
   dynamic defaultFramebuffer;
   dynamic defaultFramebufferTexture;
   // 场景用
-  dynamic sceneProgram; // 模型着色器
-  dynamic sceneVao;
-  dynamic sceneVbo;
-  List<int> vao = [];
-  List<dynamic> vbo = [];
+  late int sceneVao;
+  List<dynamic> sceneVbo = [];
   late int renderingProgram;
   late vm.Vector3 cameraPos, cameraFront, cameraUp;
   late vm.Matrix4 pMat;
+  // 背景用
 
   int t = DateTime.now().millisecondsSinceEpoch;
 
@@ -71,21 +69,21 @@ class _OpenGLSceneState extends State<OpenGLScene> with WidgetsBindingObserver {
       nvalues.add(norm[ind[i]].z);
     }
 
-    vao.add(gl.createVertexArray());
-    gl.bindVertexArray(vao[0]);
+    sceneVao = gl.createVertexArray();
+    gl.bindVertexArray(sceneVao);
 
-    vbo.add(gl.createBuffer());
-    gl.bindBuffer(gl.ARRAY_BUFFER, vbo[0]);
+    sceneVbo.add(gl.createBuffer());
+    gl.bindBuffer(gl.ARRAY_BUFFER, sceneVbo[0]);
     gl.bufferData(gl.ARRAY_BUFFER, pvalues.length * Float32List.bytesPerElement,
         Float32List.fromList(pvalues), gl.STATIC_DRAW);
 
-    vbo.add(gl.createBuffer());
-    gl.bindBuffer(gl.ARRAY_BUFFER, vbo[1]);
+    sceneVbo.add(gl.createBuffer());
+    gl.bindBuffer(gl.ARRAY_BUFFER, sceneVbo[1]);
     gl.bufferData(gl.ARRAY_BUFFER, tvalues.length * Float32List.bytesPerElement,
         Float32List.fromList(tvalues), gl.STATIC_DRAW);
 
-    vbo.add(gl.createBuffer());
-    gl.bindBuffer(gl.ARRAY_BUFFER, vbo[2]);
+    sceneVbo.add(gl.createBuffer());
+    gl.bindBuffer(gl.ARRAY_BUFFER, sceneVbo[2]);
     gl.bufferData(gl.ARRAY_BUFFER, nvalues.length * Float32List.bytesPerElement,
         Float32List.fromList(nvalues), gl.STATIC_DRAW);
   }
@@ -282,13 +280,13 @@ void main(void)
     gl.uniformMatrix4fv(mvLoc, false, mvMat.storage);
     gl.uniformMatrix4fv(projLoc, false, pMat.storage);
 
-    gl.bindVertexArray(vao[0]);
+    gl.bindVertexArray(sceneVao);
     gl.vertexAttribPointer(0, 3, gl.FLOAT, false, 0, 0);
     gl.enableVertexAttribArray(0);
-    gl.bindBuffer(gl.ARRAY_BUFFER, vbo[1]);
+    gl.bindBuffer(gl.ARRAY_BUFFER, sceneVbo[1]);
     gl.enableVertexAttribArray(1);
     gl.vertexAttribPointer(1, 2, gl.FLOAT, false, 0, 0);
-    gl.bindBuffer(gl.ARRAY_BUFFER, vbo[2]);
+    gl.bindBuffer(gl.ARRAY_BUFFER, sceneVbo[2]);
     gl.enableVertexAttribArray(2);
     gl.vertexAttribPointer(2, 3, gl.FLOAT, false, 0, 0);
 

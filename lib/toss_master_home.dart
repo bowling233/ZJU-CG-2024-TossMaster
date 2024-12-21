@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'opengl_test.dart';
+import 'opengl_scene.dart';
 import 'control_widget.dart';
 import 'opengl_model.dart';
 import 'package:file_picker/file_picker.dart';
@@ -98,7 +98,7 @@ class _TossMasterHomeState extends State<TossMasterHome> {
             mainAxisAlignment: MainAxisAlignment.start,
             children: <Widget>[
               OpenGLScene(),
-              ControlWidget(),
+              //ControlWidget(),
             ],
           ),
         ),

@@ -48,6 +48,8 @@ class _OpenGLSceneState extends State<OpenGLScene> with WidgetsBindingObserver {
   CameraController? cameraController;
   late Throttler throttler; // Throttler to limit camera frame rate
   NativeUint8Array? cameraData; // 背景纹理数据
+  // temporary
+  Uint8List? cameraDataUint8List;
 
   // ***********************
   // Camera Part
@@ -443,6 +445,8 @@ void main() {
           int y = (processedImage.height - height.toInt()) ~/ 2;
           processedImage = imglib.copyCrop(processedImage,
               x: x, y: y, width: width.toInt(), height: height.toInt());
+          // encode to png and store in memory
+          cameraDataUint8List = imglib.encodePng(processedImage);
 
           setState(() {
             cameraData = NativeUint8Array.from(processedImage.toUint8List());
@@ -458,23 +462,23 @@ void main() {
 
     return Column(
       children: [
-        Container(
-            width: width,
-            height: width,
-            color: Colors.black,
-            child: Builder(builder: (BuildContext context) {
-              if (kIsWeb) {
-                return flutterGlPlugin.isInitialized
-                    ? HtmlElementView(
-                        viewType: flutterGlPlugin.textureId!.toString())
-                    : Container();
-              } else {
-                return flutterGlPlugin.isInitialized
-                    ? Texture(textureId: flutterGlPlugin.textureId!)
-                    : Container();
-              }
-            })),
-        //cameraData == null ? const Placeholder() : Image.memory(cameraData!),
+        // Container(
+        //     width: width,
+        //     height: width,
+        //     color: Colors.black,
+        //     child: Builder(builder: (BuildContext context) {
+        //       if (kIsWeb) {
+        //         return flutterGlPlugin.isInitialized
+        //             ? HtmlElementView(
+        //                 viewType: flutterGlPlugin.textureId!.toString())
+        //             : Container();
+        //       } else {
+        //         return flutterGlPlugin.isInitialized
+        //             ? Texture(textureId: flutterGlPlugin.textureId!)
+        //             : Container();
+        //       }
+        //     })),
+        cameraData == null ? const Placeholder() : Image.memory(cameraDataUint8List!),
       ],
     );
   }
