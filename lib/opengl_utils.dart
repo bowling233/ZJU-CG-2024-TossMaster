@@ -1,9 +1,13 @@
+import 'dart:developer' as developer;
 import 'package:image/image.dart' as imglib;
 import 'package:camera/camera.dart';
-import 'dart:developer' as developer;
 
 // *********************************
-// from C
+// OpenGL 纹理
+// *********************************
+
+// *********************************
+// OpenGL 着色器
 // *********************************
 
 bool checkOpenGLError(gl) {
@@ -101,42 +105,8 @@ int createShaderProgram(gl, String vp, String fp) {
 }
 
 // *********************************
-// from C done
+// 相机图像转换
 // *********************************
-
-initShaders(gl, vsSource, fsSource) {
-  makeShader(gl, src, type) {
-    var shader = gl.createShader(type);
-    gl.shaderSource(shader, src);
-    gl.compileShader(shader);
-    var res = gl.getShaderParameter(shader, gl.COMPILE_STATUS);
-    if (res == 0 || res == false) {
-      developer.log("Error compiling shader: ${gl.getShaderInfoLog(shader)}");
-      return;
-    }
-    return shader;
-  }
-
-  // Compile shaders
-  var vertexShader = makeShader(gl, vsSource, gl.VERTEX_SHADER);
-  var fragmentShader = makeShader(gl, fsSource, gl.FRAGMENT_SHADER);
-
-  // Create program
-  dynamic glProgram = gl.createProgram();
-
-  // Attach and link shaders to the program
-  gl.attachShader(glProgram, vertexShader);
-  gl.attachShader(glProgram, fragmentShader);
-  gl.linkProgram(glProgram);
-  var res = gl.getProgramParameter(glProgram, gl.LINK_STATUS);
-  developer.log(" initShaders LINK_STATUS _res: $res ");
-  if (res == false || res == 0) {
-    developer.log("Unable to initialize the shader program");
-    return null;
-  }
-
-  return glProgram;
-}
 
 imglib.Image convertYUV420ToImage(CameraImage cameraImage) {
   final imageWidth = cameraImage.width;

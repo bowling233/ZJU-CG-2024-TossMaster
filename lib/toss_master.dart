@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 import 'dart:math';
+import 'dart:developer' as developer;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -8,12 +9,16 @@ import 'package:flutter/material.dart';
 import 'package:flutter_gl/flutter_gl.dart';
 import 'package:flutter_gl/native-array/NativeArray.app.dart';
 import 'package:permission_handler/permission_handler.dart';
-import 'dart:developer' as developer;
 import 'package:image/image.dart' as imglib;
 import 'package:camera/camera.dart';
+import 'package:vector_math/vector_math.dart' as vm;
+import 'package:file_picker/file_picker.dart';
+
 import 'opengl_utils.dart';
 import 'opengl_sphere.dart' as sphere;
-import 'package:vector_math/vector_math.dart' as vm;
+import 'opengl_model.dart';
+
+enum Mode { editScene, game, editLight }
 
 class Throttler {
   Throttler({required this.milliSeconds});
@@ -36,13 +41,14 @@ class Throttler {
   }
 }
 
-class OpenGLScene extends StatefulWidget {
-  const OpenGLScene({super.key});
+class TossMaster extends StatefulWidget {
+  const TossMaster({super.key});
   @override
-  State<OpenGLScene> createState() => _OpenGLSceneState();
+  State<TossMaster> createState() => _TossMasterState();
 }
 
-class _OpenGLSceneState extends State<OpenGLScene> with WidgetsBindingObserver {
+class _TossMasterState extends State<TossMaster> with WidgetsBindingObserver {
+    Mode _mode = Mode.editScene;
   // ***********************
   // 相机数据及其参数
   // ***********************
@@ -61,6 +67,10 @@ class _OpenGLSceneState extends State<OpenGLScene> with WidgetsBindingObserver {
   // ***********************
   // OpenGL Part
   // ***********************
+  // 模型库
+  List<ImportedModel> models = [];
+  int currentModelIndex = 0;
+  // 基本
   late FlutterGlPlugin flutterGlPlugin;
   int? fboId;
   num dpr = 1.0;
@@ -162,8 +172,8 @@ class _OpenGLSceneState extends State<OpenGLScene> with WidgetsBindingObserver {
     // 绑定纹理
     gl.bindTexture(gl.TEXTURE_2D, bgTexture);
     // 传递纹理数据
-    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGB, (width * dpr).toInt(), (height * dpr).toInt(), 0,
-        gl.RGB, gl.UNSIGNED_BYTE, cameraData);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGB, (width * dpr).toInt(),
+        (height * dpr).toInt(), 0, gl.RGB, gl.UNSIGNED_BYTE, cameraData);
     // 设置纹理单元
     gl.activeTexture(gl.TEXTURE0);
     gl.uniform1i(gl.getUniformLocation(bgProgram, 'bgTexture'), 0);
@@ -460,13 +470,61 @@ void main(void)
     initPlatformState();
   }
 
+  Widget get _modeWidget {
+    switch (_mode) {
+      case Mode.editScene:
+        return const EditSceneWidget();
+      case Mode.game:
+        return const GameModeWidget();
+      case Mode.editLight:
+        return const EditLightWidget();
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    return Builder(
-      builder: (BuildContext context) {
-        initSize(context);
-        return SingleChildScrollView(child: _build(context));
-      },
+    initSize(context);
+    return Scaffold(
+      appBar: AppBar(
+        backgroundColor: Theme.of(context).colorScheme.inversePrimary,
+        title: const Text('TossMaster - ZJU CG 2024'),
+      ),
+      body: Center(
+        child: Column(
+            mainAxisAlignment: MainAxisAlignment.start,
+            children: <Widget>[
+              // OpenGL Scene
+              SingleChildScrollView(child: _build(context)),
+              // Control Panel
+              _modeWidget,
+        const Spacer(),
+        SegmentedButton<Mode>(
+          segments: const <ButtonSegment<Mode>>[
+            ButtonSegment<Mode>(
+              value: Mode.editScene,
+              label: Text('场景编辑'),
+              icon: Icon(Icons.edit),
+            ),
+            ButtonSegment<Mode>(
+              value: Mode.editLight,
+              label: Text('光照编辑'),
+              icon: Icon(Icons.lightbulb),
+            ),
+            ButtonSegment<Mode>(
+              value: Mode.game,
+              label: Text('游戏'),
+              icon: Icon(Icons.gamepad),
+            ),
+          ],
+          selected: <Mode>{_mode},
+          onSelectionChanged: (Set<Mode> newSelection) {
+            setState(() {
+              _mode = newSelection.first;
+            });
+          },
+        )
+            ]),
+      ),
     );
   }
 
@@ -535,6 +593,66 @@ void main(void)
     );
   }
 
+  // 用于选择模型的对话框
+  Future<void> _modelsDialog() async {
+    return showDialog<void>(
+      context: context,
+      barrierDismissible: false, // user must tap button!
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Text('AlertDialog Title'),
+          content: const SingleChildScrollView(
+            child: ListBody(
+              children: <Widget>[
+                Text('等待替换为模型显示'),
+              ],
+            ),
+          ),
+          actions: <Widget>[
+            // 取消按钮
+            TextButton.icon(
+              icon: const Icon(Icons.cancel),
+              label: const Text('Cancel'),
+              onPressed: () {
+                Navigator.of(context).pop();
+              },
+            ),
+            // 添加模型按钮
+            TextButton.icon(
+              icon: const Icon(Icons.add),
+              label: const Text('Add'),
+              onPressed: () async {
+                FilePickerResult? result =
+                    await FilePicker.platform.pickFiles();
+                if (result == null) {
+                  return;
+                }
+                final file = result.files.single;
+                final path = file.path;
+                if (path == null) {
+                  return;
+                }
+                debugPrint("selected file: $path");
+                final model = ImportedModel(path);
+
+                models.add(model);
+                setState(() {});
+              },
+            ),
+            // 确定选中按钮
+            TextButton.icon(
+              icon: const Icon(Icons.check),
+              label: const Text('OK'),
+              onPressed: () {
+                Navigator.of(context).pop();
+              },
+            ),
+          ],
+        );
+      },
+    );
+  }
+
   // 创建 FBO 用于离屏渲染
   setupDefaultFBO() {
     final gl = flutterGlPlugin.gl;
@@ -568,5 +686,43 @@ void main(void)
     Future.delayed(const Duration(milliseconds: 33), () {
       animate();
     });
+  }
+}
+
+class EditSceneWidget extends StatelessWidget {
+  const EditSceneWidget({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: <Widget>[
+        ElevatedButton.icon(
+          icon: const Icon(Icons.add),
+          onPressed: () {},
+          label: const Text('选择模型'),
+        ),
+        ElevatedButton.icon(
+          icon: const Icon(Icons.lightbulb),
+          onPressed: () {},
+          label: const Text('光照调整'),
+        ),
+      ],
+    );
+  }
+}
+
+class GameModeWidget extends StatelessWidget {
+  const GameModeWidget({super.key});
+  @override
+  Widget build(BuildContext context) {
+    return Placeholder();
+  }
+}
+
+class EditLightWidget extends StatelessWidget {
+  const EditLightWidget({super.key});
+  @override
+  Widget build(BuildContext context) {
+    return Placeholder();
   }
 }

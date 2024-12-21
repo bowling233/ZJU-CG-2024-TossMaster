@@ -13,7 +13,7 @@
 - （7 分）与增强现实应用结合。
 
 项目分工：
-
+·
 - 杨琳玥：负责碰撞检测，主循环设计。
 - 朱宝林：负责将代码迁移到 Flutter 框架，处理用户交互和 AR。
 
@@ -24,6 +24,9 @@
 ### 移动端渲染机制
 
 ### 模型
+
+基本体素建模表达能力：来自 `vector_math` 库。
+OBJ 格式三维模型导入能力：迁移自作业中的 OBJ 加载器。
 
 ### 材质与纹理
 
@@ -51,9 +54,13 @@
 
 这些问题非常关键，导致我们放弃了 OpenCV。
 
-接下来考虑现有 AR 框架。AR 框架在平台之间分裂，如安卓有 ARCore，iOS 有 ARKit。引入 AR 框架将导致平台依赖，也加重了负担，因为我们只希望从单张图片中获取相机姿态。如果使用 AR 框架，一般需要启动一个 AR 会话，导致相机的实时捕捉。
+接下来考虑现有 AR 框架。AR 框架在平台之间分裂，如安卓有 ARCore，iOS 有 ARKit。引入 AR 框架将导致平台依赖，也加重了负担，因为我们只希望从单张图片中获取相机姿态。如果使用 AR 框架，一般需要启动一个 AR 会话，导致相机的实时捕捉。我们其实也做了一些尝试，但是没有成功：
 
-最后我们自行实现平面识别和相机姿态估计算法。
+- `ar_flutter_plugin` 能够支持安卓和 iOS，但已经 2 年无人维护，产生了一堆依赖问题，短时间内我们无法解决。
+- `arcore_flutter_plugin` 缺少相机参数接口。
+- `arkit_plugin` 具有接口，但开发人员缺少 iOS 设备，无法测试。
+
+自行实现平面识别和相机姿态估计算法已经远远超出了课程的范围，我们最终决定放弃 AR 部分。
 
 ## 参考文献
 
@@ -61,5 +68,4 @@
     - [theamorn/flutter-stream-image](https://github.com/theamorn/flutter-stream-image)：
     - [[Flutter] 用相機畫面一小部分做辨識。這篇文章源自於我在工作上第一次選用 Flutter… | by Claire Liu | Flutter Taipei | Medium](https://medium.com/flutter-taipei/flutter-%E5%B0%87%E7%9B%B8%E6%A9%9F%E7%95%AB%E9%9D%A2%E4%B8%80%E5%B0%8F%E9%83%A8%E5%88%86%E5%81%9A%E8%BE%A8%E8%AD%98-8247e9372c52)
     - [image_converter.dart](https://gist.github.com/Alby-o/fe87e35bc21d534c8220aed7df028e03)
-- 下面的文献帮助我们实现了 AR 算法：
-    - [Nocami/PythonComputerVision-5-AR: 借助 pygame 和 openGL 在平面内实现简单的 AR 例子](https://github.com/Nocami/PythonComputerVision-5-AR)
+
