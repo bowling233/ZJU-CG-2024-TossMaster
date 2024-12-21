@@ -13,47 +13,9 @@
 
 ## OpenCV 与 OpenGL 的交互问题
 
-### 图像格式
-
-OpenCV 中图像存储为 Mat，需要转换为 OpenGL 合适的纹理对象。幸运的是 opencv_dart 提供了比较完善的示例，其中涉及视频流图像转换：
-
-```dart
-
-Uint8List? _wroteFrame;
-_wroteFrame == null
-                ? const Placeholder()
-                : Image.memory(
-                    _wroteFrame!,
-                    width: 300,
-                  ),
-```
-
-这里 `_wroteFrame` 正是要传入 OpenGL 纹理的数据格式，看看它是怎么转换的：
-
-```dart
-final vc1 = cv.VideoCapture.fromFile(dst!);
-final (s, f) = await vc1.readAsync();
-vc1.dispose();
-
-if (s) {
-        final (s1, bytes) = await cv.imencodeAsync(".png", f);
-        f.dispose();
-
-        if (s1) {
-                setState(() {
-                        _wroteFrame = bytes;
-                });
-        }
-}
-```
-
 后来因为 OpenCV VideoCapture 仅能输出灰度图像而放弃。
 
 ### 使用 camera 获得图像流
-
-- 参考 [](https://medium.com/kbtg-life/real-time-machine-learning-with-flutter-camera-bbcf1b5c3193) 获得图像流
-- 参考 [](https://medium.com/flutter-taipei/flutter-%E5%B0%87%E7%9B%B8%E6%A9%9F%E7%95%AB%E9%9D%A2%E4%B8%80%E5%B0%8F%E9%83%A8%E5%88%86%E5%81%9A%E8%BE%A8%E8%AD%98-8247e9372c52) 对图像进行裁切处理
-- 上面两个参考资料都引用了 [](https://gist.github.com/Alby-o/fe87e35bc21d534c8220aed7df028e03) 的转换代码。
 
 目前代码中，在 ImageStream 内执行图像格式转换，安卓上格式为 yuv420。转换函数：
 

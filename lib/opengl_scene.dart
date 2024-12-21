@@ -51,6 +51,8 @@ class _OpenGLSceneState extends State<OpenGLScene> with WidgetsBindingObserver {
   late Throttler throttler; // Throttler to limit camera frame rate
   NativeUint8Array? cameraData; // 背景纹理数据
   double fov = 45.0;
+  bool cameraFlipH = false, cameraFlipV = false;
+  int cameraRotation = 0;
 
   // ***********************
   // Camera Part
@@ -160,7 +162,7 @@ class _OpenGLSceneState extends State<OpenGLScene> with WidgetsBindingObserver {
     // 绑定纹理
     gl.bindTexture(gl.TEXTURE_2D, bgTexture);
     // 传递纹理数据
-    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGB, width.toInt(), height.toInt(), 0,
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGB, (width * dpr).toInt(), (height * dpr).toInt(), 0,
         gl.RGB, gl.UNSIGNED_BYTE, cameraData);
     // 设置纹理单元
     gl.activeTexture(gl.TEXTURE0);
@@ -233,9 +235,11 @@ out vec2 tc;
 uniform mat4 mv_matrix;
 uniform mat4 proj_matrix;
 //layout (binding=0) uniform sampler2D s;
+out vec4 varyingColor;
 
 void main(void)
 {	gl_Position = proj_matrix * mv_matrix * vec4(position,1.0);
+varyingColor = vec4(position, 1.0) * 0.5 + vec4(0.5, 0.5, 0.5, 0.5);
 	//tc = tex_coord;
 }
 """;
@@ -244,6 +248,7 @@ void main(void)
 
 in vec2 tc;
 out vec4 color;
+in vec4 varyingColor;
 
 uniform mat4 mv_matrix;
 uniform mat4 proj_matrix;
@@ -251,7 +256,8 @@ layout (binding=0) uniform sampler2D s;
 
 void main(void)
 {	//color = texture(s,tc);
-  color = vec4(1.0, 0.0, 0.0, 1.0);
+  //color = vec4(1.0, 0.0, 0.0, 1.0);
+  color = varyingColor;
 }
 """;
 
@@ -346,12 +352,12 @@ void main(void)
           .first;
       // debug: print camera properties
       developer.log(
-          "selected camera: ${cameraDescription.name} ${cameraDescription.lensDirection}");
+          "[_setupCameraController] selected camera: ${cameraDescription.name} ${cameraDescription.lensDirection}");
 
       setState(() {
         cameraController = CameraController(
           cameraDescription,
-          ResolutionPreset.medium,
+          ResolutionPreset.veryHigh,
           enableAudio: false,
           // 32-bit BGRA.
           imageFormatGroup: ImageFormatGroup.bgra8888,
@@ -362,6 +368,9 @@ void main(void)
           return;
         }
         setState(() {});
+        // debug: print camera properties
+        developer.log(
+            "[_setupCameraController] ${cameraController?.value.previewSize} ");
       }).catchError(
         (Object e) {
           developer.log(e.toString());
@@ -378,7 +387,7 @@ void main(void)
     requestPermission();
     _setupCameraController();
 
-    throttler = Throttler(milliSeconds: 25);
+    throttler = Throttler(milliSeconds: 33);
   }
 
   void requestPermission() async {
@@ -410,8 +419,6 @@ void main(void)
     };
 
     await flutterGlPlugin.initialize(options: options);
-
-    developer.log(" flutterGlPlugin: textureid: ${flutterGlPlugin.textureId} ");
 
     setState(() {});
 
@@ -448,7 +455,7 @@ void main(void)
     screenSize = mq.size;
     dpr = mq.devicePixelRatio;
 
-    developer.log(" screenSize: $screenSize dpr: $dpr ");
+    developer.log("[initSize] screenSize: $screenSize dpr: $dpr ");
 
     initPlatformState();
   }
@@ -476,21 +483,32 @@ void main(void)
         throttler.run(() async {
           // convert image to Image
           imglib.Image processedImage = convertCameraImage(image);
-          int x = (processedImage.width - width.toInt()) ~/ 2;
-          int y = (processedImage.height - height.toInt()) ~/ 2;
+          int x = ((processedImage.width - (width * dpr).toInt()) ~/ 2);
+          int y = ((processedImage.height - (height * dpr).toInt()) ~/ 2);
           processedImage = imglib.copyCrop(processedImage,
-              x: x, y: y, width: width.toInt(), height: height.toInt());
-          processedImage = imglib.flipVertical(processedImage);
-          processedImage = imglib.copyRotate(processedImage, angle: -90);
+              x: x,
+              y: y,
+              width: (width * dpr).toInt(),
+              height: (height * dpr).toInt());
+          if (cameraFlipH) {
+            processedImage = imglib.flipHorizontal(processedImage);
+          }
+          if (cameraFlipV) {
+            processedImage = imglib.flipVertical(processedImage);
+          }
+          if (cameraRotation != 0) {
+            processedImage =
+                imglib.copyRotate(processedImage, angle: cameraRotation);
+          }
 
           setState(() {
             cameraData = NativeUint8Array.from(processedImage.toUint8List());
           });
 
           // debug: print image and data properties
-          developer.log(
-              "[startImageStream] image: ${processedImage.width}x${processedImage.height} ${processedImage.format}");
-          developer.log("[startImageStream] cameraData: ${cameraData!.length}");
+          // developer.log(
+          //     "[startImageStream] image: ${processedImage.width}x${processedImage.height} ${processedImage.format}");
+          // developer.log("[startImageStream] cameraData: ${cameraData!.length}");
         });
       });
     }

@@ -152,7 +152,7 @@ imglib.Image convertYUV420ToImage(CameraImage cameraImage) {
   final int uvRowStride = cameraImage.planes[1].bytesPerRow;
   final int uvPixelStride = cameraImage.planes[1].bytesPerPixel!;
 
-  final image = imglib.Image(width: imageWidth, height: imageHeight);
+  final image = imglib.Image(width: imageHeight, height: imageWidth);
 
   for (int h = 0; h < imageHeight; h++) {
     int uvh = (h / 2).floor();
@@ -184,7 +184,7 @@ imglib.Image convertYUV420ToImage(CameraImage cameraImage) {
       g = g.clamp(0, 255);
       b = b.clamp(0, 255);
 
-      image.setPixelRgb(w, h, r, g, b);
+      image.setPixelRgb(imageHeight - h - 1, imageWidth - w - 1, r, g, b);
     }
   }
   return image;
