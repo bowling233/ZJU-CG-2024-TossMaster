@@ -19,7 +19,7 @@ import 'opengl_utils.dart';
 import 'opengl_sphere.dart' as sphere;
 import 'opengl_model.dart';
 
-enum Mode { editScene, game, editLight }
+enum Mode { editScene, game, editLight, editCamera }
 
 class Throttler {
   Throttler({required this.milliSeconds});
@@ -56,9 +56,11 @@ class _TossMasterState extends State<TossMaster> with WidgetsBindingObserver {
   //   - 模式控制面板
   //   - 模式切换
   // ***********************
-  Mode _mode = Mode.editScene;
+  Mode _mode = Mode.editCamera;
   // imglib.Image? testData;
-  PointerEvent? _testEvent;
+  PointerEvent? _pointerEvent;
+  int? _selectedModelIndex, _selectedModelInstanceIndex;
+  double tMin = double.infinity;
 
   @override
   Widget build(BuildContext context) {
@@ -74,24 +76,47 @@ class _TossMasterState extends State<TossMaster> with WidgetsBindingObserver {
               // OpenGL 场景
               Listener(
                 child: _build(context),
-                onPointerDown: (PointerDownEvent event) {
-                  _testEvent = event;
-                },
-                onPointerMove: (PointerMoveEvent event) {
-                  _testEvent = event;
-                },
-                onPointerUp: (PointerUpEvent event) {
-                  _testEvent = event;
-                },
+                onPointerDown: (PointerDownEvent event) => setState(() {
+                  _pointerEvent = event;
+
+                  // 重置选中结果
+                  _selectedModelIndex = _selectedModelInstanceIndex = null;
+                  tMin = double.infinity;
+                  ({int index, double t}) testResult =
+                      (index: -1, t: double.infinity);
+                  for (var i = 0; i < models.length; i++) {
+                    var myResult = models[i].hisTest(
+                        screenToNDC(
+                            vm.Vector2(
+                                event.localPosition.dx, event.localPosition.dy),
+                            vm.Vector2(width, height)),
+                        cameraPos,
+                        vMat,
+                        pMat);
+                    if (myResult.t < testResult.t) {
+                      testResult = myResult;
+                      _selectedModelIndex = i;
+                      _selectedModelInstanceIndex = testResult.index;
+                    }
+                  }
+                }),
+                onPointerMove: (PointerMoveEvent event) =>
+                    setState(() => _pointerEvent = event),
+                onPointerUp: (PointerUpEvent event) =>
+                    setState(() => _pointerEvent = event),
               ),
               Container(
                   //child: testData != null
                   //    ? Image.memory(imglib.encodePng(testData!),
                   //        width: 100, height: 100)
                   //    : const Placeholder()),
-                  child: _testEvent != null
-                      ? Text(
-                          "x: ${_testEvent!.position.dx} y: ${_testEvent!.position.dy}")
+                  child: _pointerEvent != null
+                      ? Column(children: [
+                          Text(
+                              "x: ${_pointerEvent!.localPosition.dx * dpr}, y: ${_pointerEvent!.localPosition.dy * dpr}"),
+                          Text(
+                              "selectedModelIndex: $_selectedModelIndex, selectedModelInstanceIndex: $_selectedModelInstanceIndex")
+                        ])
                       : Container()),
               // 模式控制面板
               _modeWidget,
@@ -99,6 +124,11 @@ class _TossMasterState extends State<TossMaster> with WidgetsBindingObserver {
               // 模式切换
               SegmentedButton<Mode>(
                 segments: const <ButtonSegment<Mode>>[
+                  ButtonSegment<Mode>(
+                    value: Mode.editCamera,
+                    label: Text('相机编辑'),
+                    icon: Icon(Icons.camera),
+                  ),
                   ButtonSegment<Mode>(
                     value: Mode.editScene,
                     label: Text('场景编辑'),
@@ -129,6 +159,121 @@ class _TossMasterState extends State<TossMaster> with WidgetsBindingObserver {
 
   Widget get _modeWidget {
     switch (_mode) {
+      // 相机编辑模式：串流、三轴位移和旋转
+      case Mode.editCamera:
+        return Column(children: <Widget>[
+          // 串流控制
+          ElevatedButton.icon(
+            icon: const Icon(Icons.camera),
+            onPressed: streamCameraImage,
+            label: const Text('相机串流'),
+          ),
+          // 前进后退
+          // Text('cameraFront: $cameraFront'),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+            ElevatedButton.icon(
+              icon: const Icon(Icons.zoom_out_map),
+              onPressed: () {
+                var tmp = cameraFront;
+                tmp.normalize();
+                tmp.scale(cameraVelocity);
+                cameraPos += tmp;
+                setState(() {});
+              },
+              label: const Text('前进'),
+            ),
+            ElevatedButton.icon(
+              icon: const Icon(Icons.zoom_in_map),
+              onPressed: () {
+                var tmp = cameraFront;
+                tmp.normalize();
+                tmp.scale(cameraVelocity);
+                cameraPos -= tmp;
+                setState(() {});
+              },
+              label: const Text('后退'),
+            ),
+          ]),
+          // 上下
+          // Text('cameraUp: $cameraUp'),
+          Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+            ElevatedButton.icon(
+              icon: const Icon(Icons.arrow_upward),
+              onPressed: () {
+                var tmp = cameraUp;
+                tmp.normalize();
+                tmp.scale(cameraVelocity);
+                cameraPos += tmp;
+                setState(() {});
+              },
+              label: const Text('上升'),
+            ),
+            ElevatedButton.icon(
+              icon: const Icon(Icons.arrow_downward),
+              onPressed: () {
+                var tmp = cameraUp;
+                tmp.normalize();
+                tmp.scale(cameraVelocity);
+                cameraPos -= tmp;
+                setState(() {});
+              },
+              label: const Text('下降'),
+            ),
+          ]),
+          // 左右
+          // Text('cameraRight: ${cameraFront.cross(cameraUp)}'),
+          Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+            ElevatedButton.icon(
+              icon: const Icon(Icons.arrow_back),
+              onPressed: () {
+                var carmeraRight = cameraFront.cross(cameraUp);
+                carmeraRight.normalize();
+                carmeraRight.scale(cameraVelocity);
+                cameraPos += carmeraRight;
+                setState(() {});
+              },
+              label: const Text('左移'),
+            ),
+            ElevatedButton.icon(
+              icon: const Icon(Icons.arrow_forward),
+              onPressed: () {
+                var carmeraRight = cameraFront.cross(cameraUp);
+                carmeraRight.normalize();
+                carmeraRight.scale(cameraVelocity);
+                cameraPos -= carmeraRight;
+                setState(() {});
+              },
+              label: const Text('右移'),
+            ),
+          ]),
+          // 水平旋转
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+            ElevatedButton.icon(
+              icon: const Icon(Icons.rotate_left),
+              onPressed: () {
+                var tmp = vm.Matrix4.identity();
+                tmp.rotate(cameraUp, vm.radians(5.0));
+                cameraFront = tmp.transform3(cameraFront);
+                setState(() {});
+              },
+              label: const Text('左转'),
+            ),
+            ElevatedButton.icon(
+              icon: const Icon(Icons.rotate_right),
+              onPressed: () {
+                var tmp = vm.Matrix4.identity();
+                tmp.rotate(cameraUp, vm.radians(-5.0));
+                cameraFront = tmp.transform3(cameraFront);
+                setState(() {});
+              },
+              label: const Text('右转'),
+            ),
+          ]),
+        ]);
       // 场景编辑模式
       case Mode.editScene:
         return Column(children: <Widget>[
@@ -137,15 +282,10 @@ class _TossMasterState extends State<TossMaster> with WidgetsBindingObserver {
             onPressed: () {},
             label: const Text('添加模型'),
           ),
-          ElevatedButton.icon(
-            icon: const Icon(Icons.camera),
-            onPressed: streamCameraImage,
-            label: const Text('相机串流'),
-          ),
         ]);
       // 光照编辑模式
       case Mode.editLight:
-        return const Placeholder();
+        return Container();
       // 游戏模式
       case Mode.game:
         return Column(
@@ -171,6 +311,7 @@ class _TossMasterState extends State<TossMaster> with WidgetsBindingObserver {
   double fov = 45.0;
   bool cameraFlipH = false, cameraFlipV = false;
   int cameraRotation = 0;
+  double cameraVelocity = 0.1;
 
   void streamCameraImage() {
     if (cameraController?.value.isStreamingImages == false) {
@@ -196,9 +337,8 @@ class _TossMasterState extends State<TossMaster> with WidgetsBindingObserver {
                 imglib.copyRotate(processedImage, angle: cameraRotation);
           }
 
-          setState(() {
-            cameraData = NativeUint8Array.from(processedImage.toUint8List());
-          });
+          cameraData = NativeUint8Array.from(processedImage.toUint8List());
+          // setState(() {});
 
           // debug: print image and data properties
           developer.log(
@@ -240,8 +380,12 @@ class _TossMasterState extends State<TossMaster> with WidgetsBindingObserver {
   dynamic bgTexture;
   // 场景用
   late int sceneProgram;
-  late vm.Vector3 cameraPos, cameraFront, cameraUp;
+  vm.Vector3 cameraPos = vm.Vector3(0.0, 0.0, 12.0),
+      cameraFront = vm.Vector3(0.0, 0.0, -1.0),
+      cameraUp = vm.Vector3(0.0, 1.0, 0.0);
   late vm.Matrix4 pMat;
+  late vm.Matrix4 vMat =
+      vm.makeViewMatrix(cameraPos, cameraPos + cameraFront, cameraUp);
   //sphere.Sphere mySphere = sphere.Sphere();
 
   int t = DateTime.now().millisecondsSinceEpoch;
@@ -356,8 +500,8 @@ class _TossMasterState extends State<TossMaster> with WidgetsBindingObserver {
 
     models.add(ImportedModel(gl, objPath, texPath));
     models[0].instantiate(gl, vm.Matrix4.translation(vm.Vector3(0, 0, 0)));
-    models[0].instantiate(gl, vm.Matrix4.translation(vm.Vector3(0, 0, 3)));
-    // models[0].instantiate(gl, vm.Matrix4.translation(vm.Vector3(0, 3, 0)));
+    models[0].instantiate(gl, vm.Matrix4.translation(vm.Vector3(2, 0, 0)));
+    models[0].instantiate(gl, vm.Matrix4.translation(vm.Vector3(0, 2, 0)));
 
     // **********
     // 着色器
@@ -475,13 +619,6 @@ void main(void)
 """;
 
     sceneProgram = createShaderProgram(gl, vs, fs);
-
-    // **********
-    // 相机
-    // **********
-    cameraPos = vm.Vector3(0.0, 0.0, 12.0);
-    cameraFront = vm.Vector3(0.0, 0.0, -1.0);
-    cameraUp = vm.Vector3(0.0, 1.0, 0.0);
   }
 
   renderScene() {
@@ -504,7 +641,7 @@ void main(void)
         vm.makePerspectiveMatrix(vm.radians(fov), width / height, 0.1, 1000.0);
     gl.uniformMatrix4fv(projLoc, false, pMat.storage);
     // 视图矩阵
-    var vMat = vm.makeViewMatrix(cameraPos, cameraPos + cameraFront, cameraUp);
+    vMat = vm.makeViewMatrix(cameraPos, cameraPos + cameraFront, cameraUp);
     gl.uniformMatrix4fv(vLoc, false, vMat.storage);
 
     for (final model in models) {
@@ -532,11 +669,6 @@ void main(void)
     if (cameraData != null) {
       renderBackground();
     }
-    cameraPos = vm.Vector3(
-        0.5 * sin(current / 1000) * 10, 0.5 * cos(current / 1000) * 10, 0);
-    cameraFront = vm.Vector3(0.0, 0.0, 0.0) - cameraPos;
-    cameraUp = vm.Vector3(
-        sin(current / 1000 + pi / 2), cos(current / 1000 + pi / 2), 0);
     renderScene();
 
     // 上屏

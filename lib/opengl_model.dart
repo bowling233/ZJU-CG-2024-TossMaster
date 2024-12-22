@@ -3,12 +3,13 @@ import 'dart:typed_data';
 import 'dart:developer';
 import 'package:flutter_gl/native-array/NativeArray.app.dart';
 import 'package:vector_math/vector_math.dart';
-import 'package:vector_math/vector_math_lists.dart';
 import 'package:image/image.dart';
 
 class ImportedModel {
   final int numVertices;
   final List<Matrix4> modelMatrix = [];
+  List<double> vertices;
+  final List<bool> selected = [];
   final int vao;
   final List<dynamic> vbo;
   final int texture;
@@ -126,15 +127,17 @@ class ImportedModel {
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
 
-    return ImportedModel._internal(numVertices, vao, vbo, texture);
+    return ImportedModel._internal(numVertices, vao, vbo, texture, triangleVerts);
   }
 
-  ImportedModel._internal(this.numVertices, this.vao, this.vbo, this.texture);
+  ImportedModel._internal(this.numVertices, this.vao, this.vbo, this.texture, this.vertices);
 
   void instantiate(gl, Matrix4 modelMatrix) {
     this.modelMatrix.add(modelMatrix);
+    selected.add(false);
   }
 
+  // 渲染
   void render(gl) {
     // 模型数据
     gl.bindVertexArray(vao);
@@ -156,5 +159,57 @@ class ImportedModel {
     // 实例化绘制
     gl.drawArraysInstanced(gl.TRIANGLES, 0, numVertices, modelMatrix.length);
     log('[ImportedModel.render()] drawArraysInstanced: ${modelMatrix.length}');
+  }
+
+  // 给定 pMat，标准设备坐标，返回选中的模型
+  ({int index,double t}) hisTest(Vector2 ndc, Vector3 cameraPos, Matrix4 vMat, Matrix4 pMat) {
+    // 反投影到裁剪空间
+    var clipSpacePoint = Vector4(ndc.x, ndc.y, -1, 1);
+    // 转换到视图空间
+    var det = pMat.invert();
+    if (det == 0) {
+      log('[ImportedModel.select()] pMat is not invertible');
+      return (index: -1, t: double.infinity);
+    }
+    Vector4 viewSpacePoint = pMat * clipSpacePoint;
+    viewSpacePoint = viewSpacePoint / viewSpacePoint.w;
+    // 转换到世界空间
+    det = vMat.invert();
+    if (det == 0) {
+      log('[ImportedModel.select()] vMat is not invertible');
+      return (index: -1, t: double.infinity);
+    }
+    var rayDirection = (vMat * viewSpacePoint.xyz - cameraPos).normalized();
+    // 判定最近相交
+    int selectedIdx = -1;
+    double tMin = double.infinity;
+    // 对场景中每个实例
+    for (final model in modelMatrix) {
+      // 对实例的每个三角形
+      for (var i = 0; i < numVertices; i += 3) {
+        var v0 = model.transformed3(Vector3(vertices[i], vertices[i + 1], vertices[i + 2]));
+        var v1 = model.transformed3(Vector3(vertices[i + 3], vertices[i + 4], vertices[i + 5]));
+        var v2 = model.transformed3(Vector3(vertices[i + 6], vertices[i + 7], vertices[i + 8]));
+        // 计算交点
+        var e1 = v1 - v0;
+        var e2 = v2 - v0;
+        var p = rayDirection.cross(e2);
+        var det = e1.dot(p);
+        if (det > -0.00001 && det < 0.00001) continue; // 平行
+        var f = 1 / det;
+        var s = cameraPos - v0;
+        var u = f * s.dot(p);
+        if (u < 0 || u > 1) continue;
+        var q = s.cross(e1);
+        var v = f * rayDirection.dot(q);
+        if (v < 0 || u + v > 1) continue;
+        var t = f * e2.dot(q);
+        if (t > 0.00001 && t < tMin) {
+          tMin = t;
+          selectedIdx = modelMatrix.indexOf(model);
+        }
+      }
+    }
+    return (index: selectedIdx, t: tMin);
   }
 }

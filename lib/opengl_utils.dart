@@ -1,6 +1,19 @@
 import 'dart:developer' as developer;
 import 'package:image/image.dart' as imglib;
 import 'package:camera/camera.dart';
+import 'package:vector_math/vector_math.dart';
+
+
+// *********************************
+// OpenGL 模型
+// *********************************
+
+Vector2 screenToNDC(Vector2 screenCoords, Vector2 screenSize) {
+  return Vector2(
+    (2.0 * screenCoords.x / screenSize.x) - 1.0,
+    1.0 - (2.0 * screenCoords.y / screenSize.y),
+  );
+}
 
 // *********************************
 // OpenGL 纹理
