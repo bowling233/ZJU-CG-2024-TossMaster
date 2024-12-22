@@ -35,7 +35,7 @@
 在项目内，所有模型存储在模型库内。模型库中的每个模型具有：
 
 - 模型的基本数据：顶点、法向量、纹理坐标、纹理图片。
-- 模型的实例数据：模型矩阵（ModelMatrix），对应场景中的每个模型实例。
+- 模型的实例数据：对应场景中的每个模型实例，包括位置向量、旋转四元数、缩放数值、特殊标记。
 
 渲染时，遍历模型库，绘制每个模型的不同实例。通过实例化渲染，可以减少重复绘制相同模型的开销。
 
@@ -53,10 +53,12 @@ void render(gl) {
     gl.activeTexture(gl.TEXTURE0);
     gl.bindTexture(gl.TEXTURE_2D, texture);
     // 实例数据
-    if (instanceMatrix.isEmpty) return;
+    if (instancePosition.isEmpty) return;
     List<double> mMatrix = [];
-    for (var i = 0; i < instanceMatrix.length; i++) {
-        mMatrix.addAll(instanceMatrix[i].storage);
+    for (var i = 0; i < instancePosition.length; i++) {
+        var modelMatrix = Matrix4.compose(instancePosition[i],
+            instanceRotation[i], Vector3.all(instanceScale[i]));
+        mMatrix.addAll(modelMatrix.storage);
     }
     gl.bindBuffer(gl.ARRAY_BUFFER, vbo[3]);
     gl.bufferData(gl.ARRAY_BUFFER, mMatrix.length * Float32List.bytesPerElement,
@@ -68,7 +70,8 @@ void render(gl) {
         Int32List.fromList(instanceFlag),
         gl.STATIC_DRAW);
     // 实例化绘制
-    gl.drawArraysInstanced(gl.TRIANGLES, 0, numVertices, instanceMatrix.length);
+    gl.drawArraysInstanced(
+        gl.TRIANGLES, 0, numVertices, instancePosition.length);
 }
 ```
 

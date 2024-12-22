@@ -14,6 +14,7 @@ import 'package:image/image.dart' as imglib;
 import 'package:camera/camera.dart';
 import 'package:vector_math/vector_math.dart' as vm;
 import 'package:file_picker/file_picker.dart';
+import 'package:sensors_plus/sensors_plus.dart';
 
 import 'opengl_utils.dart';
 import 'opengl_model.dart';
@@ -161,7 +162,7 @@ class _TossMasterState extends State<TossMaster> with WidgetsBindingObserver {
                       vm.radians((event.rotation - lastRotation) * 50));
                   lastRotation = event.rotation;
 
-                  // // 缩放比例差值
+                  // 缩放比例差值
                   var scaleDiff = (event.scale - lastScale);
                   lastScale = event.scale;
                   developer.log("scaleDiff: $scaleDiff");
@@ -264,18 +265,30 @@ class _TossMasterState extends State<TossMaster> with WidgetsBindingObserver {
         return Scrollbar(
             child: SingleChildScrollView(
                 child: Column(children: <Widget>[
-          // 串流控制
-          ElevatedButton.icon(
-            icon: const Icon(Icons.camera),
-            onPressed: streamCameraImage,
-            label: const Text('相机串流'),
-          ),
+          Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+            // 串流控制
+            ElevatedButton.icon(
+              icon: const Icon(Icons.camera),
+              onPressed: streamCameraImage,
+              label: const Text('相机串流'),
+            ),
+            // 陀螺仪控制
+            ElevatedButton.icon(
+              icon: const Icon(Icons.gps_fixed),
+              onPressed: () => setState(() {
+                listenGyroscope = !listenGyroscope;
+              }),
+              label: const Text('陀螺仪'),
+            ),
+          ]),
           // 调试：相机参数
-          // Text("cameraPos: $cameraPos"),
-          // Text("cameraFront: $cameraFront"),
-          // Text("cameraUp: $cameraUp"),
-          // Text("cameraVelocity: $cameraVelocity"),
-          // 速度调整
+          // Text(
+          //     "Pos: ${cameraPos.x.toInt()}, ${cameraPos.y.toInt()}, ${cameraPos.z.toInt()}"),
+          // Text(
+          //     "Front: ${cameraFront.x.toInt()}, ${cameraFront.y.toInt()}, ${cameraFront.z.toInt()}"),
+          // Text(
+          //     "Up: ${cameraUp.x.toInt()}, ${cameraUp.y.toInt()}, ${cameraUp.z.toInt()}"),
+          // Text("Velocity: ${cameraVelocity.toInt()}"),
           // 速度调整
           Row(mainAxisAlignment: MainAxisAlignment.center, children: [
             GestureDetector(
@@ -312,6 +325,17 @@ class _TossMasterState extends State<TossMaster> with WidgetsBindingObserver {
                 if (_timers.isNotEmpty) _timers.removeFirst().cancel();
               },
             ),
+            // 重置相机位置和速度
+            ElevatedButton.icon(
+                icon: const Icon(Icons.restore),
+                onPressed: () {
+                  cameraPos = vm.Vector3(0.0, 0.0, 12.0);
+                  cameraFront = vm.Vector3(0.0, 0.0, -1.0);
+                  cameraUp = vm.Vector3(0.0, 1.0, 0.0);
+                  cameraVelocity = 0.1;
+                  setState(() {});
+                },
+                label: const Text('重置'))
           ]),
           // 前进后退
           Row(mainAxisAlignment: MainAxisAlignment.center, children: [
@@ -355,9 +379,6 @@ class _TossMasterState extends State<TossMaster> with WidgetsBindingObserver {
                 if (_timers.isNotEmpty) _timers.removeFirst().cancel();
               },
             ),
-          ]),
-          // 上下
-          Row(mainAxisAlignment: MainAxisAlignment.center, children: [
             GestureDetector(
               child: ElevatedButton.icon(
                 icon: const Icon(Icons.arrow_upward),
@@ -441,9 +462,6 @@ class _TossMasterState extends State<TossMaster> with WidgetsBindingObserver {
                 if (_timers.isNotEmpty) _timers.removeFirst().cancel();
               },
             ),
-          ]),
-          // 水平旋转
-          Row(mainAxisAlignment: MainAxisAlignment.center, children: [
             GestureDetector(
               child: ElevatedButton.icon(
                 icon: const Icon(Icons.rotate_left),
@@ -1058,13 +1076,85 @@ void main(void)
     }
   }
 
+  // ***********************
+  // 相机和传感器
+  // ***********************
+  GyroscopeEvent? _gyroscopeEvent;
+  int? _gyroscopeLastInterval;
+  final _streamSubscriptions = <StreamSubscription<dynamic>>[];
+  Duration sensorInterval = SensorInterval.normalInterval;
+  DateTime? _gyroscopeUpdateTime;
+  static const Duration _ignoreDuration = Duration(milliseconds: 20);
+  // 是否开启
+  bool listenGyroscope = false;
+  // 滤波参数
+  double alpha = 0.2; // 滤波强度，值越低滤波效果越明显
+  vm.Vector3 filteredAcceleration = vm.Vector3.zero(); // 用于保存滤波后的加速度数据
+
   @override
   void initState() {
     super.initState();
 
-    // start camera
+    // 相机
     requestPermission();
     _setupCameraController();
+
+    // 陀螺仪
+    _streamSubscriptions.add(
+      gyroscopeEventStream(samplingPeriod: sensorInterval).listen(
+        (GyroscopeEvent event) {
+          final now = event.timestamp;
+          setState(() {
+            _gyroscopeEvent = event;
+            if (_gyroscopeUpdateTime != null) {
+              final interval = now.difference(_gyroscopeUpdateTime!);
+              if (interval > _ignoreDuration) {
+                _gyroscopeLastInterval = interval.inMilliseconds;
+              }
+            }
+          });
+          _gyroscopeUpdateTime = now;
+          // 根据陀螺仪更新相机方向
+          if (_gyroscopeEvent != null && listenGyroscope) {
+            final dt = _gyroscopeLastInterval != null
+                ? _gyroscopeLastInterval! / 1000.0
+                : 0.033; // 默认 33ms
+
+            final rotation = vm.Vector3(
+              _gyroscopeEvent!.x * dt,
+              _gyroscopeEvent!.y * dt,
+              _gyroscopeEvent!.z * dt,
+            );
+
+            // 旋转矩阵
+            final rotationMatrix = vm.Matrix4.rotationX(rotation.x) *
+                vm.Matrix4.rotationY(rotation.y) *
+                vm.Matrix4.rotationZ(rotation.z);
+
+            // 更新相机方向
+            cameraFront = rotationMatrix.transform3(cameraFront);
+            cameraFront.normalize();
+            cameraUp = rotationMatrix.transform3(cameraUp);
+            cameraUp.normalize();
+
+            developer.log("[gyroscopeEvent] cameraFront: $cameraFront");
+            developer.log("[gyroscopeEvent] cameraUp: $cameraUp");
+          }
+        },
+        onError: (e) {
+          showDialog(
+              context: context,
+              builder: (context) {
+                return const AlertDialog(
+                  title: Text("Sensor Not Found"),
+                  content: Text(
+                      "It seems that your device doesn't support Gyroscope Sensor"),
+                );
+              });
+        },
+        cancelOnError: true,
+      ),
+    );
 
     throttler = Throttler(milliSeconds: 33);
   }
@@ -1158,5 +1248,13 @@ void main(void)
                 : Container();
           }
         }));
+  }
+
+  @override
+  void dispose() {
+    super.dispose();
+    for (final subscription in _streamSubscriptions) {
+      subscription.cancel();
+    }
   }
 }
