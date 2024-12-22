@@ -1,21 +1,20 @@
 import 'dart:io';
+import 'dart:developer' as developer;
 import 'package:vector_math/vector_math.dart';
-
-// 场景中的模型
-class SceneModel{
-  // 模型库索引
-  int index;
-  // 模型矩阵
-  Matrix4 modelMatrix;
-
-  SceneModel(this.index, this.modelMatrix);
-}
+import 'package:image/image.dart';
 
 class ImportedModel {
   final int numVertices;
   final List<Vector3> vertices;
   final List<Vector2> texCoords;
   final List<Vector3> normalVecs;
+  // 模型的纹理
+  late Image texture;
+  // 加入场景的模型实例
+  late List<Matrix4> modelMatrix;
+  // OpenGL 相关
+  late int vao;
+  late List<dynamic> vbo;
 
   // Factory constructor to create an ImportedModel from a file path
   factory ImportedModel(String filePath) {
@@ -27,18 +26,15 @@ class ImportedModel {
     final tcs = modelImporter.getTextureCoordinates();
     final normals = modelImporter.getNormals();
 
-    final vertices = List.generate(
-        numVertices,
-        (i) => Vector3(
-            verts[i * 3], verts[i * 3 + 1], verts[i * 3 + 2]));
-    final texCoords = List.generate(
-        numVertices, (i) => Vector2(tcs[i * 2], tcs[i * 2 + 1]));
-    final normalVecs = List.generate(
-        numVertices,
-        (i) => Vector3(
-            normals[i * 3], normals[i * 3 + 1], normals[i * 3 + 2]));
+    final vertices = List.generate(numVertices,
+        (i) => Vector3(verts[i * 3], verts[i * 3 + 1], verts[i * 3 + 2]));
+    final texCoords =
+        List.generate(numVertices, (i) => Vector2(tcs[i * 2], tcs[i * 2 + 1]));
+    final normalVecs = List.generate(numVertices,
+        (i) => Vector3(normals[i * 3], normals[i * 3 + 1], normals[i * 3 + 2]));
 
-    return ImportedModel._internal(numVertices, vertices, texCoords, normalVecs);
+    return ImportedModel._internal(
+        numVertices, vertices, texCoords, normalVecs);
   }
 
   ImportedModel._internal(
@@ -63,6 +59,8 @@ class ModelImporter {
     final lines = file.readAsLinesSync();
 
     for (var line in lines) {
+      // debug: log file content
+      developer.log(line);
       if (line.startsWith('v ')) {
         final parts = line.substring(2).trim().split(RegExp(r'\s+'));
         vertVals.addAll(parts.map(double.parse));
@@ -98,7 +96,17 @@ class ModelImporter {
           ]);
         }
       }
+      else{
+        developer.log("Unknown line type: $line");
+      }
     }
+    // print all length
+    developer.log("vertVals length: ${vertVals.length}");
+    developer.log("triangleVerts length: ${triangleVerts.length}");
+    developer.log("textureCoords length: ${textureCoords.length}");
+    developer.log("stVals length: ${stVals.length}");
+    developer.log("normals length: ${normals.length}");
+    developer.log("normVals length: ${normVals.length}");
   }
 
   int getNumVertices() => (triangleVerts.length ~/ 3);

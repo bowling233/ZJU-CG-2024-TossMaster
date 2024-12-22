@@ -2,20 +2,70 @@
 marp: true
 ---
 
-Marp
+TossMaster
 ===
 
-![h:250](https://avatars1.githubusercontent.com/u/20685754?v=4)
+##### 基于 Flutter 框架、OpenGL ES 3.0 渲染的 3D 跨平台 AR 投掷游戏
 
-##### Markdown presentation ecosystem
+###### by 朱宝林 杨琳玥
 
-###### by Marp Team ([@marp-team][marp-team])
+---
 
-[marp-team]: https://github.com/marp-team
-[marpit]: https://github.com/marp-team/marpit
-[marp-core]: https://github.com/marp-team/marp-core
-[marp-cli]: https://github.com/marp-team/marp-cli
-[marp-vscode]: https://github.com/marp-team/marp-vscode
+# 一、项目内容
+
+---
+
+# 二、Demo 展示
+
+---
+
+# 三、心得与体会
+
+##### 充满着荆棘与坎坷的跨平台开发之路
+
+###### 强烈不建议无移动端开发经验的同学尝试基于 OpenGL 的跨平台开发
+
+---
+
+## 3.1 Flutter 缺少基础设施
+
+
+
+---
+
+### `flutter_gl` 的绘制方式
+
+```mermaid
+flowchart
+	subgraph s1["Dart Binding"]
+		n3["We"]
+		n1["FrameBuffer 离屏渲染"]
+	end
+	subgraph s2["Native"]
+		n2["NativeTexture"]
+	end
+	n1 --- n2
+	n3["你"] --- n1
+```
+
+---
+
+
+## 3.2 Dart 是一门函数式语言
+
+Dart 是一款由 Google 开发的函数式编程语言，你将在 Flutter 框架中探索无状态和数据的不可变性......
+
+![bg right:30% contain](presentation.assets/video-lag.gif)
+
+![](https://docs.flutter.dev/assets/images/docs/development/data-and-backend/state-mgmt/ui-equals-function-of-state.png)
+
+> When the state of your app changes (for example, the user flips a switch in the settings screen), you change the state, and that triggers a **redraw of the user interface**.
+
+---
+
+### 拒绝重绘！
+
+将所有状态存储在一个 Widget 中，状态变更在 Widget 内部处理。
 
 ---
 

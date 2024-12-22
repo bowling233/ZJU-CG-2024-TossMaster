@@ -8,6 +8,7 @@ import 'package:flutter/material.dart';
 
 import 'package:flutter_gl/flutter_gl.dart';
 import 'package:flutter_gl/native-array/NativeArray.app.dart';
+import 'package:path/path.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:image/image.dart' as imglib;
 import 'package:camera/camera.dart';
@@ -48,9 +49,89 @@ class TossMaster extends StatefulWidget {
 }
 
 class _TossMasterState extends State<TossMaster> with WidgetsBindingObserver {
-    Mode _mode = Mode.editScene;
   // ***********************
-  // 相机数据及其参数
+  // UI
+  // - OpenGL 场景
+  // - 控制面板
+  //   - 模式控制面板
+  //   - 模式切换
+  // ***********************
+  Mode _mode = Mode.editScene;
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        backgroundColor: Theme.of(context).colorScheme.inversePrimary,
+        title: const Text('TossMaster - ZJU CG 2024'),
+      ),
+      body: Center(
+        child: Column(
+            mainAxisAlignment: MainAxisAlignment.start,
+            children: <Widget>[
+              // OpenGL 场景
+              SingleChildScrollView(child: _build(context)),
+              // 模式控制面板
+              _modeWidget,
+              const Spacer(),
+              // 模式切换
+              SegmentedButton<Mode>(
+                segments: const <ButtonSegment<Mode>>[
+                  ButtonSegment<Mode>(
+                    value: Mode.editScene,
+                    label: Text('场景编辑'),
+                    icon: Icon(Icons.edit),
+                  ),
+                  ButtonSegment<Mode>(
+                    value: Mode.editLight,
+                    label: Text('光照编辑'),
+                    icon: Icon(Icons.lightbulb),
+                  ),
+                  ButtonSegment<Mode>(
+                    value: Mode.game,
+                    label: Text('游戏'),
+                    icon: Icon(Icons.gamepad),
+                  ),
+                ],
+                selected: <Mode>{_mode},
+                onSelectionChanged: (Set<Mode> newSelection) {
+                  setState(() {
+                    _mode = newSelection.first;
+                  });
+                },
+              )
+            ]),
+      ),
+    );
+  }
+
+  Widget get _modeWidget {
+    switch (_mode) {
+      // 场景编辑模式
+      case Mode.editScene:
+        return Column(children: <Widget>[
+          ElevatedButton.icon(
+            icon: const Icon(Icons.add),
+            onPressed: () {},
+            label: const Text('添加模型'),
+          ),
+          ElevatedButton.icon(
+            icon: const Icon(Icons.camera),
+            onPressed: streamCameraImage,
+            label: const Text('相机串流'),
+          ),
+        ]);
+      // 光照编辑模式
+      case Mode.editLight:
+        return const Placeholder();
+      // 游戏模式
+      case Mode.game:
+        return const Placeholder();
+    }
+  }
+
+  // ***********************
+  // 相机
   // ***********************
   List<CameraDescription> cameras = [];
   CameraController? cameraController;
@@ -59,6 +140,46 @@ class _TossMasterState extends State<TossMaster> with WidgetsBindingObserver {
   double fov = 45.0;
   bool cameraFlipH = false, cameraFlipV = false;
   int cameraRotation = 0;
+
+  void streamCameraImage() {
+    if (cameraController?.value.isStreamingImages == false) {
+      cameraController?.startImageStream((image) async {
+        throttler.run(() async {
+          // convert image to Image
+          imglib.Image processedImage = convertCameraImage(image);
+          int x = ((processedImage.width - (width * dpr).toInt()) ~/ 2);
+          int y = ((processedImage.height - (height * dpr).toInt()) ~/ 2);
+          processedImage = imglib.copyCrop(processedImage,
+              x: x,
+              y: y,
+              width: (width * dpr).toInt(),
+              height: (height * dpr).toInt());
+          if (cameraFlipH) {
+            processedImage = imglib.flipHorizontal(processedImage);
+          }
+          if (cameraFlipV) {
+            processedImage = imglib.flipVertical(processedImage);
+          }
+          if (cameraRotation != 0) {
+            processedImage =
+                imglib.copyRotate(processedImage, angle: cameraRotation);
+          }
+
+          setState(() {
+            cameraData = NativeUint8Array.from(processedImage.toUint8List());
+          });
+
+          // debug: print image and data properties
+          developer.log(
+              "[startImageStream] image: ${processedImage.width}x${processedImage.height} ${processedImage.format}");
+          developer.log("[startImageStream] cameraData: ${cameraData!.length}");
+        });
+      });
+    } else {
+      cameraController?.stopImageStream();
+      cameraData = null;
+    }
+  }
 
   // ***********************
   // Camera Part
@@ -92,7 +213,7 @@ class _TossMasterState extends State<TossMaster> with WidgetsBindingObserver {
   late int sceneProgram;
   late vm.Vector3 cameraPos, cameraFront, cameraUp;
   late vm.Matrix4 pMat;
-  sphere.Sphere mySphere = sphere.Sphere();
+  //sphere.Sphere mySphere = sphere.Sphere();
 
   int t = DateTime.now().millisecondsSinceEpoch;
 
@@ -183,30 +304,49 @@ class _TossMasterState extends State<TossMaster> with WidgetsBindingObserver {
   }
 
   // 场景
-  prepareScene() {
+  prepareScene() async {
     final gl = flutterGlPlugin.gl;
     // **********
     // 顶点
     // **********
-    List<int> ind = mySphere.getIndices();
-    List<vm.Vector3> vert = mySphere.getVertices();
-    List<vm.Vector2> tex = mySphere.getTexCoords();
-    List<vm.Vector3> norm = mySphere.getNormals();
+    // List<int> ind = mySphere.getIndices();
+    // List<vm.Vector3> vert = mySphere.getVertices();
+    // List<vm.Vector2> tex = mySphere.getTexCoords();
+    // List<vm.Vector3> norm = mySphere.getNormals();
+    FilePickerResult? result = await FilePicker.platform.pickFiles();
+    if (result != null) {
+      developer.log("selected file: ${result.files.single.path}");
+      models.add(ImportedModel(result.files.single.path!));
+      currentModelIndex = models.length - 1;
+    }
+    List<vm.Vector3> vert = models[currentModelIndex].getVertices();
+    List<vm.Vector2> tex = models[currentModelIndex].getTextureCoords();
+    List<vm.Vector3> norm = models[currentModelIndex].getNormals();
 
     List<double> pvalues = [];
     List<double> tvalues = [];
     List<double> nvalues = [];
 
-    int numIndices = mySphere.getNumIndices();
-    for (int i = 0; i < numIndices; i++) {
-      pvalues.add(vert[ind[i]].x);
-      pvalues.add(vert[ind[i]].y);
-      pvalues.add(vert[ind[i]].z);
-      tvalues.add(tex[ind[i]].x);
-      tvalues.add(tex[ind[i]].y);
-      nvalues.add(norm[ind[i]].x);
-      nvalues.add(norm[ind[i]].y);
-      nvalues.add(norm[ind[i]].z);
+    // int numIndices = mySphere.getNumIndices();
+    // for (int i = 0; i < numIndices; i++) {
+    //   pvalues.add(vert[ind[i]].x);
+    //   pvalues.add(vert[ind[i]].y);
+    //   pvalues.add(vert[ind[i]].z);
+    //   tvalues.add(tex[ind[i]].x);
+    //   tvalues.add(tex[ind[i]].y);
+    //   nvalues.add(norm[ind[i]].x);
+    //   nvalues.add(norm[ind[i]].y);
+    //   nvalues.add(norm[ind[i]].z);
+    // }
+    for (int i = 0; i < models[currentModelIndex].getNumVertices(); i++) {
+      pvalues.add(vert[i].x);
+      pvalues.add(vert[i].y);
+      pvalues.add(vert[i].z);
+      tvalues.add(tex[i].x);
+      tvalues.add(tex[i].y);
+      nvalues.add(norm[i].x);
+      nvalues.add(norm[i].y);
+      nvalues.add(norm[i].z);
     }
 
     sceneVao = gl.createVertexArray();
@@ -228,6 +368,10 @@ class _TossMasterState extends State<TossMaster> with WidgetsBindingObserver {
         Float32List.fromList(nvalues), gl.STATIC_DRAW);
 
     // **********
+    // 顶点
+    // **********
+
+    // **********
     // 着色器
     // **********
     String version = "300 es";
@@ -238,36 +382,103 @@ class _TossMasterState extends State<TossMaster> with WidgetsBindingObserver {
     }
     var vs = """#version $version
 
-layout (location = 0) in vec3 position;
-layout (location = 1) in vec2 tex_coord;
-out vec2 tc;
+layout (location = 0) in vec3 vertPos;
+//layout (location = 1) in vec2 tex_coord;
+layout (location = 2) in vec3 vertNormal;
+out vec3 varyingNormal;
+out vec3 varyingLightDir;
+out vec3 varyingVertPos;
+out vec3 varyingHalfVector;
+//out vec2 tc;
 
+struct PositionalLight
+{	vec4 ambient;
+	vec4 diffuse;
+	vec4 specular;
+	vec3 position;
+};
+struct Material
+{	vec4 ambient;
+	vec4 diffuse;
+	vec4 specular;
+	float shininess;
+};
+
+uniform vec4 globalAmbient;
+uniform PositionalLight light;
+uniform Material material;
 uniform mat4 mv_matrix;
 uniform mat4 proj_matrix;
+uniform mat4 norm_matrix;
 //layout (binding=0) uniform sampler2D s;
-out vec4 varyingColor;
 
 void main(void)
-{	gl_Position = proj_matrix * mv_matrix * vec4(position,1.0);
-varyingColor = vec4(position, 1.0) * 0.5 + vec4(0.5, 0.5, 0.5, 0.5);
+{	varyingVertPos = (mv_matrix * vec4(vertPos,1.0)).xyz;
+	varyingLightDir = light.position - varyingVertPos;
+	varyingNormal = (norm_matrix * vec4(vertNormal,1.0)).xyz;
+
+	varyingHalfVector =
+		normalize(normalize(varyingLightDir)
+		+ normalize(-varyingVertPos)).xyz;
+
+	gl_Position = proj_matrix * mv_matrix * vec4(vertPos,1.0);
 	//tc = tex_coord;
 }
+
 """;
 
     var fs = """#version $version
 
-in vec2 tc;
-out vec4 color;
-in vec4 varyingColor;
+in vec3 varyingNormal;
+in vec3 varyingLightDir;
+in vec3 varyingVertPos;
+in vec3 varyingHalfVector;
 
+out vec4 fragColor;
+
+struct PositionalLight
+{	vec4 ambient;
+	vec4 diffuse;
+	vec4 specular;
+	vec3 position;
+};
+
+struct Material
+{	vec4 ambient;
+	vec4 diffuse;
+	vec4 specular;
+	float shininess;
+};
+
+uniform vec4 globalAmbient;
+uniform PositionalLight light;
+uniform Material material;
 uniform mat4 mv_matrix;
 uniform mat4 proj_matrix;
-layout (binding=0) uniform sampler2D s;
+uniform mat4 norm_matrix;
 
 void main(void)
-{	//color = texture(s,tc);
-  //color = vec4(1.0, 0.0, 0.0, 1.0);
-  color = varyingColor;
+{	// normalize the light, normal, and view vectors:
+	vec3 L = normalize(varyingLightDir);
+	vec3 N = normalize(varyingNormal);
+	vec3 V = normalize(-varyingVertPos);
+
+	// get the angle between the light and surface normal:
+	float cosTheta = dot(L,N);
+
+	// halfway vector varyingHalfVector was computed in the vertex shader,
+	// and interpolated prior to reaching the fragment shader.
+	// It is copied into variable H here for convenience later.
+	vec3 H = normalize(varyingHalfVector);
+
+	// get angle between the normal and the halfway vector
+	float cosPhi = dot(H,N);
+
+	// compute ADS contributions (per pixel):
+	vec3 ambient = ((globalAmbient * material.ambient) + (light.ambient * material.ambient)).xyz;
+	vec3 diffuse = light.diffuse.xyz * material.diffuse.xyz * max(cosTheta,0.0);
+	vec3 specular = light.specular.xyz * material.specular.xyz * pow(max(cosPhi,0.0), material.shininess*3.0);
+	fragColor = vec4((ambient + diffuse + specular), 1.0);
 }
 """;
 
@@ -290,23 +501,25 @@ void main(void)
 
     pMat =
         vm.makePerspectiveMatrix(vm.radians(fov), width / height, 0.1, 1000.0);
-    var vMat = vm.makeViewMatrix(cameraPos, cameraPos + cameraFront, cameraUp);
-    var mMat = vm.Matrix4.identity();
-    var mvMat = vMat * mMat;
-    gl.uniformMatrix4fv(mvLoc, false, mvMat.storage);
     gl.uniformMatrix4fv(projLoc, false, pMat.storage);
 
+    var vMat = vm.makeViewMatrix(cameraPos, cameraPos + cameraFront, cameraUp);
+    var mMat = vm.Matrix4.translation(vm.Vector3(0.0, 0.0, 3.0));
+    var mvMat = vMat * mMat;
+    gl.uniformMatrix4fv(mvLoc, false, mvMat.storage);
+
     gl.bindVertexArray(sceneVao);
+    gl.bindBuffer(gl.ARRAY_BUFFER, sceneVbo[0]);
     gl.vertexAttribPointer(0, 3, gl.FLOAT, false, 0, 0);
     gl.enableVertexAttribArray(0);
     gl.bindBuffer(gl.ARRAY_BUFFER, sceneVbo[1]);
-    gl.enableVertexAttribArray(1);
     gl.vertexAttribPointer(1, 2, gl.FLOAT, false, 0, 0);
+    gl.enableVertexAttribArray(1);
     gl.bindBuffer(gl.ARRAY_BUFFER, sceneVbo[2]);
-    gl.enableVertexAttribArray(2);
     gl.vertexAttribPointer(2, 3, gl.FLOAT, false, 0, 0);
+    gl.enableVertexAttribArray(2);
 
-    gl.drawArrays(gl.TRIANGLES, 0, mySphere.getNumIndices());
+    gl.drawArrays(gl.TRIANGLES, 0, models[currentModelIndex].getNumVertices());
   }
 
   render() {
@@ -314,11 +527,19 @@ void main(void)
     // 清理
     int current = DateTime.now().millisecondsSinceEpoch;
     gl.viewport(0, 0, (width * dpr).toInt(), (height * dpr).toInt());
-    num blue = sin((current - t) / 500);
+    num blue = (sin((current - t) / 200) + 1) / 2;
+    num green = (cos((current - t) / 300) + 1) / 2;
+    num red = (sin((current - t) / 400) + cos((current - t) / 500) + 2) / 4;
     // gl.clearColor(0.0, 0.0, 0.0, 0.0);
-    gl.clearColor(1.0, 0.0, blue, 1.0);
+    gl.clearColor(red, green, blue, 1.0);
     gl.clearDepth(1);
     gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+
+    cameraPos =
+        vm.Vector3(sin(current / 10000) * 10, cos(current / 10000) * 10, 0);
+    cameraFront = vm.Vector3(0.0, 0.0, 0.0) - cameraPos;
+    cameraUp = vm.Vector3(
+        sin(current / 10000 + pi / 2), cos(current / 10000 + pi / 2), 0);
 
     // 绘制
     if (cameraData != null) {
@@ -413,6 +634,23 @@ void main(void)
   // Build (Prepare)
   // ********************
 
+  setup() async {
+    // web no need use fbo
+    if (!kIsWeb) {
+      await flutterGlPlugin.prepareContext();
+
+      setupDefaultFBO();
+      sourceTexture = defaultFramebufferTexture;
+    }
+
+    setState(() {});
+
+    prepareBackground();
+    await prepareScene();
+
+    animate();
+  }
+
   // Platform messages are asynchronous, so we initialize in an async method.
   Future<void> initPlatformState() async {
     width = screenSize!.width;
@@ -438,23 +676,6 @@ void main(void)
     });
   }
 
-  setup() async {
-    // web no need use fbo
-    if (!kIsWeb) {
-      await flutterGlPlugin.prepareContext();
-
-      setupDefaultFBO();
-      sourceTexture = defaultFramebufferTexture;
-    }
-
-    setState(() {});
-
-    prepareBackground();
-    prepareScene();
-
-    animate();
-  }
-
   initSize(BuildContext context) {
     if (screenSize != null) {
       return;
@@ -470,188 +691,86 @@ void main(void)
     initPlatformState();
   }
 
-  Widget get _modeWidget {
-    switch (_mode) {
-      case Mode.editScene:
-        return const EditSceneWidget();
-      case Mode.game:
-        return const GameModeWidget();
-      case Mode.editLight:
-        return const EditLightWidget();
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    initSize(context);
-    return Scaffold(
-      appBar: AppBar(
-        backgroundColor: Theme.of(context).colorScheme.inversePrimary,
-        title: const Text('TossMaster - ZJU CG 2024'),
-      ),
-      body: Center(
-        child: Column(
-            mainAxisAlignment: MainAxisAlignment.start,
-            children: <Widget>[
-              // OpenGL Scene
-              SingleChildScrollView(child: _build(context)),
-              // Control Panel
-              _modeWidget,
-        const Spacer(),
-        SegmentedButton<Mode>(
-          segments: const <ButtonSegment<Mode>>[
-            ButtonSegment<Mode>(
-              value: Mode.editScene,
-              label: Text('场景编辑'),
-              icon: Icon(Icons.edit),
-            ),
-            ButtonSegment<Mode>(
-              value: Mode.editLight,
-              label: Text('光照编辑'),
-              icon: Icon(Icons.lightbulb),
-            ),
-            ButtonSegment<Mode>(
-              value: Mode.game,
-              label: Text('游戏'),
-              icon: Icon(Icons.gamepad),
-            ),
-          ],
-          selected: <Mode>{_mode},
-          onSelectionChanged: (Set<Mode> newSelection) {
-            setState(() {
-              _mode = newSelection.first;
-            });
-          },
-        )
-            ]),
-      ),
-    );
-  }
-
   Widget _build(BuildContext context) {
-    if (cameraController == null ||
-        cameraController?.value.isInitialized == false) {
-      return const Center(
-        child: CircularProgressIndicator(),
-      );
-    }
+    initSize(context);
 
-    if (cameraController?.value.isStreamingImages == false) {
-      cameraController?.startImageStream((image) async {
-        throttler.run(() async {
-          // convert image to Image
-          imglib.Image processedImage = convertCameraImage(image);
-          int x = ((processedImage.width - (width * dpr).toInt()) ~/ 2);
-          int y = ((processedImage.height - (height * dpr).toInt()) ~/ 2);
-          processedImage = imglib.copyCrop(processedImage,
-              x: x,
-              y: y,
-              width: (width * dpr).toInt(),
-              height: (height * dpr).toInt());
-          if (cameraFlipH) {
-            processedImage = imglib.flipHorizontal(processedImage);
+    return Container(
+        width: width,
+        height: width,
+        color: Colors.black,
+        child: Builder(builder: (BuildContext context) {
+          if (kIsWeb) {
+            return flutterGlPlugin.isInitialized
+                ? HtmlElementView(
+                    viewType: flutterGlPlugin.textureId!.toString())
+                : Container();
+          } else {
+            return flutterGlPlugin.isInitialized
+                ? Texture(textureId: flutterGlPlugin.textureId!)
+                : Container();
           }
-          if (cameraFlipV) {
-            processedImage = imglib.flipVertical(processedImage);
-          }
-          if (cameraRotation != 0) {
-            processedImage =
-                imglib.copyRotate(processedImage, angle: cameraRotation);
-          }
-
-          setState(() {
-            cameraData = NativeUint8Array.from(processedImage.toUint8List());
-          });
-
-          // debug: print image and data properties
-          // developer.log(
-          //     "[startImageStream] image: ${processedImage.width}x${processedImage.height} ${processedImage.format}");
-          // developer.log("[startImageStream] cameraData: ${cameraData!.length}");
-        });
-      });
-    }
-
-    return Column(
-      children: [
-        Container(
-            width: width,
-            height: width,
-            color: Colors.black,
-            child: Builder(builder: (BuildContext context) {
-              if (kIsWeb) {
-                return flutterGlPlugin.isInitialized
-                    ? HtmlElementView(
-                        viewType: flutterGlPlugin.textureId!.toString())
-                    : Container();
-              } else {
-                return flutterGlPlugin.isInitialized
-                    ? Texture(textureId: flutterGlPlugin.textureId!)
-                    : Container();
-              }
-            })),
-      ],
-    );
+        }));
   }
 
   // 用于选择模型的对话框
-  Future<void> _modelsDialog() async {
-    return showDialog<void>(
-      context: context,
-      barrierDismissible: false, // user must tap button!
-      builder: (BuildContext context) {
-        return AlertDialog(
-          title: const Text('AlertDialog Title'),
-          content: const SingleChildScrollView(
-            child: ListBody(
-              children: <Widget>[
-                Text('等待替换为模型显示'),
-              ],
-            ),
-          ),
-          actions: <Widget>[
-            // 取消按钮
-            TextButton.icon(
-              icon: const Icon(Icons.cancel),
-              label: const Text('Cancel'),
-              onPressed: () {
-                Navigator.of(context).pop();
-              },
-            ),
-            // 添加模型按钮
-            TextButton.icon(
-              icon: const Icon(Icons.add),
-              label: const Text('Add'),
-              onPressed: () async {
-                FilePickerResult? result =
-                    await FilePicker.platform.pickFiles();
-                if (result == null) {
-                  return;
-                }
-                final file = result.files.single;
-                final path = file.path;
-                if (path == null) {
-                  return;
-                }
-                debugPrint("selected file: $path");
-                final model = ImportedModel(path);
+  // Future<void> _modelsDialog() async {
+  //   return showDialog<void>(
+  //     context: context,
+  //     barrierDismissible: false, // user must tap button!
+  //     builder: (BuildContext context) {
+  //       return AlertDialog(
+  //         title: const Text('AlertDialog Title'),
+  //         content: const SingleChildScrollView(
+  //           child: ListBody(
+  //             children: <Widget>[
+  //               Text('等待替换为模型显示'),
+  //             ],
+  //           ),
+  //         ),
+  //         actions: <Widget>[
+  //           // 取消按钮
+  //           TextButton.icon(
+  //             icon: const Icon(Icons.cancel),
+  //             label: const Text('Cancel'),
+  //             onPressed: () {
+  //               Navigator.of(context).pop();
+  //             },
+  //           ),
+  //           // 添加模型按钮
+  //           TextButton.icon(
+  //             icon: const Icon(Icons.add),
+  //             label: const Text('Add'),
+  //             onPressed: () async {
+  //               FilePickerResult? result =
+  //                   await FilePicker.platform.pickFiles();
+  //               if (result == null) {
+  //                 return;
+  //               }
+  //               final file = result.files.single;
+  //               final path = file.path;
+  //               if (path == null) {
+  //                 return;
+  //               }
+  //               debugPrint("selected file: $path");
+  //               final model = ImportedModel(path);
 
-                models.add(model);
-                setState(() {});
-              },
-            ),
-            // 确定选中按钮
-            TextButton.icon(
-              icon: const Icon(Icons.check),
-              label: const Text('OK'),
-              onPressed: () {
-                Navigator.of(context).pop();
-              },
-            ),
-          ],
-        );
-      },
-    );
-  }
+  //               models.add(model);
+  //               setState(() {});
+  //             },
+  //           ),
+  //           // 确定选中按钮
+  //           TextButton.icon(
+  //             icon: const Icon(Icons.check),
+  //             label: const Text('OK'),
+  //             onPressed: () {
+  //               Navigator.of(context).pop();
+  //             },
+  //           ),
+  //         ],
+  //       );
+  //     },
+  //   );
+  // }
 
   // 创建 FBO 用于离屏渲染
   setupDefaultFBO() {
@@ -686,43 +805,5 @@ void main(void)
     Future.delayed(const Duration(milliseconds: 33), () {
       animate();
     });
-  }
-}
-
-class EditSceneWidget extends StatelessWidget {
-  const EditSceneWidget({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: <Widget>[
-        ElevatedButton.icon(
-          icon: const Icon(Icons.add),
-          onPressed: () {},
-          label: const Text('选择模型'),
-        ),
-        ElevatedButton.icon(
-          icon: const Icon(Icons.lightbulb),
-          onPressed: () {},
-          label: const Text('光照调整'),
-        ),
-      ],
-    );
-  }
-}
-
-class GameModeWidget extends StatelessWidget {
-  const GameModeWidget({super.key});
-  @override
-  Widget build(BuildContext context) {
-    return Placeholder();
-  }
-}
-
-class EditLightWidget extends StatelessWidget {
-  const EditLightWidget({super.key});
-  @override
-  Widget build(BuildContext context) {
-    return Placeholder();
   }
 }
