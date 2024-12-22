@@ -58,6 +58,7 @@ class _TossMasterState extends State<TossMaster> with WidgetsBindingObserver {
   // ***********************
   Mode _mode = Mode.editScene;
   // imglib.Image? testData;
+  PointerEvent? _testEvent;
 
   @override
   Widget build(BuildContext context) {
@@ -71,12 +72,27 @@ class _TossMasterState extends State<TossMaster> with WidgetsBindingObserver {
             mainAxisAlignment: MainAxisAlignment.start,
             children: <Widget>[
               // OpenGL 场景
-              SingleChildScrollView(child: _build(context)),
-              // Container(
-              //     child: testData != null
-              //         ? Image.memory(imglib.encodePng(testData!),
-              //             width: 100, height: 100)
-              //         : const Placeholder()),
+              Listener(
+                child: _build(context),
+                onPointerDown: (PointerDownEvent event) {
+                  _testEvent = event;
+                },
+                onPointerMove: (PointerMoveEvent event) {
+                  _testEvent = event;
+                },
+                onPointerUp: (PointerUpEvent event) {
+                  _testEvent = event;
+                },
+              ),
+              Container(
+                  //child: testData != null
+                  //    ? Image.memory(imglib.encodePng(testData!),
+                  //        width: 100, height: 100)
+                  //    : const Placeholder()),
+                  child: _testEvent != null
+                      ? Text(
+                          "x: ${_testEvent!.position.dx} y: ${_testEvent!.position.dy}")
+                      : Container()),
               // 模式控制面板
               _modeWidget,
               const Spacer(),
@@ -132,7 +148,16 @@ class _TossMasterState extends State<TossMaster> with WidgetsBindingObserver {
         return const Placeholder();
       // 游戏模式
       case Mode.game:
-        return const Placeholder();
+        return Column(
+          children: [
+            // 投掷按钮
+            ElevatedButton.icon(
+              icon: const Icon(Icons.add),
+              onPressed: () {},
+              label: const Text('添加模型'),
+            ),
+          ],
+        );
     }
   }
 
@@ -507,8 +532,8 @@ void main(void)
     if (cameraData != null) {
       renderBackground();
     }
-    cameraPos =
-        vm.Vector3(0.5 * sin(current / 1000) * 10, 0.5 * cos(current / 1000) * 10, 0);
+    cameraPos = vm.Vector3(
+        0.5 * sin(current / 1000) * 10, 0.5 * cos(current / 1000) * 10, 0);
     cameraFront = vm.Vector3(0.0, 0.0, 0.0) - cameraPos;
     cameraUp = vm.Vector3(
         sin(current / 1000 + pi / 2), cos(current / 1000 + pi / 2), 0);
