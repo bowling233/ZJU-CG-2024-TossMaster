@@ -15,9 +15,11 @@ class ImportedModel {
   final String texPath;
   String? gifPath;
   // 实例数据
-  // final List<Vector3> instancePosition = [];
+  final List<Vector3> instancePosition = [];
   final List<Vector3> instanceVelocity = [];
-  final List<Matrix4> instanceMatrix = [];
+  final List<Quaternion> instanceRotation = [];
+  final List<double> instanceScale = [];
+  // final List<Matrix4> instanceMatrix = [];
   final List<int> instanceFlag = [];
 
   factory ImportedModel(gl, String objPath, String texPath, {String? gifPath}) {
@@ -149,8 +151,12 @@ class ImportedModel {
   ImportedModel._internal(this.numVertices, this.vao, this.vbo, this.texture,
       this.vertices, this.texPath, this.gifPath);
 
-  void instantiate(gl, Matrix4 modelMatrix) {
-    instanceMatrix.add(modelMatrix);
+  void instantiate() {
+    // instanceMatrix.add(modelMatrix);
+    instancePosition.add(Vector3(0, 0, 0));
+    instanceVelocity.add(Vector3(0, 0, 0));
+    instanceRotation.add(Quaternion.identity());
+    instanceScale.add(1);
     instanceFlag.add(0);
   }
 
@@ -164,10 +170,12 @@ class ImportedModel {
     gl.activeTexture(gl.TEXTURE0);
     gl.bindTexture(gl.TEXTURE_2D, texture);
     // 实例数据
-    if (instanceMatrix.isEmpty) return;
+    if (instancePosition.isEmpty) return;
     List<double> mMatrix = [];
-    for (var i = 0; i < instanceMatrix.length; i++) {
-      mMatrix.addAll(instanceMatrix[i].storage);
+    for (var i = 0; i < instancePosition.length; i++) {
+      var modelMatrix = Matrix4.compose(instancePosition[i],
+          instanceRotation[i], Vector3.all(instanceScale[i]));
+      mMatrix.addAll(modelMatrix.storage);
     }
     gl.bindBuffer(gl.ARRAY_BUFFER, vbo[3]);
     gl.bufferData(gl.ARRAY_BUFFER, mMatrix.length * Float32List.bytesPerElement,
@@ -179,7 +187,8 @@ class ImportedModel {
         Int32List.fromList(instanceFlag),
         gl.STATIC_DRAW);
     // 实例化绘制
-    gl.drawArraysInstanced(gl.TRIANGLES, 0, numVertices, instanceMatrix.length);
+    gl.drawArraysInstanced(
+        gl.TRIANGLES, 0, numVertices, instancePosition.length);
   }
 
   // 实例选择
@@ -219,14 +228,16 @@ class ImportedModel {
     int selectedIdx = -1;
     double tMin = double.infinity;
     // 对场景中每个实例
-    for (final model in instanceMatrix) {
+    for (var idx = 0; idx < instancePosition.length; idx++) {
+      var modelMatrix = Matrix4.compose(instancePosition[idx],
+          instanceRotation[idx], Vector3.all(instanceScale[idx]));
       // 对实例的每个三角形
       for (var i = 0; i < numVertices; i += 3) {
-        var v0 = model.transformed3(
+        var v0 = modelMatrix.transformed3(
             Vector3(vertices[i], vertices[i + 1], vertices[i + 2]));
-        var v1 = model.transformed3(
+        var v1 = modelMatrix.transformed3(
             Vector3(vertices[i + 3], vertices[i + 4], vertices[i + 5]));
-        var v2 = model.transformed3(
+        var v2 = modelMatrix.transformed3(
             Vector3(vertices[i + 6], vertices[i + 7], vertices[i + 8]));
         // 计算交点
         var e1 = v1 - v0;
@@ -244,14 +255,17 @@ class ImportedModel {
         var t = f * e2.dot(q);
         if (t > 0.00001 && t < tMin) {
           tMin = t;
-          selectedIdx = instanceMatrix.indexOf(model);
+          selectedIdx = idx;
         }
       }
     }
     return (index: selectedIdx, t: tMin);
   }
 
-  void transform(int index, Matrix4 transform) {
-    instanceMatrix[index] *= transform;
+  void transform(int index, Vector3 positionDelta, Quaternion rotationDelta,
+      double scaleDelta) {
+    instancePosition[index] += positionDelta;
+    instanceRotation[index] = rotationDelta * instanceRotation[index];
+    instanceScale[index] += scaleDelta;
   }
 }

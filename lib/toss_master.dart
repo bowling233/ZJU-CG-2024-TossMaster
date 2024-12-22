@@ -76,6 +76,7 @@ class _TossMasterState extends State<TossMaster> with WidgetsBindingObserver {
   // imglib.Image? testData;
   int? _selectedModelIndex, _selectedModelInstanceIndex;
   double tMin = double.infinity;
+  double lastScale = 1.0, lastRotation = 0.0;
 
   @override
   Widget build(BuildContext context) {
@@ -133,25 +134,43 @@ class _TossMasterState extends State<TossMaster> with WidgetsBindingObserver {
                         .select(_selectedModelInstanceIndex!);
                   }
                 }),
-                // 拖动：移动物体
-                onPanUpdate: (DragUpdateDetails event) => setState(() {
-                  developer
-                      .log("onPanUpdate ${event.localPosition} ${event.delta}");
+                // Scale 手势：包含移动、旋转和缩放
+                onScaleStart: (ScaleStartDetails event) {
+                  // 重置差值
+                  lastScale = 1.0;
+                  lastRotation = 0.0;
+                },
+                onScaleUpdate: (ScaleUpdateDetails event) => setState(() {
+                  developer.log(
+                      "onScaleUpdate ${event.scale} ${event.focalPointDelta} ${event.rotation}");
                   // 要求已选中特定实例
                   if (_selectedModelIndex == null ||
                       _selectedModelInstanceIndex == null) {
                     return;
                   }
 
-                  // 移动物体，参考相机坐标系
+                  // 移动向量
                   var cameraRight = cameraFront.cross(cameraUp);
                   cameraRight.normalize();
-                  var delta = cameraRight * (event.delta.dx) +
-                      cameraUp * (-event.delta.dy);
+                  var positionDelta =
+                      cameraRight * (event.focalPointDelta.dx * 0.01) +
+                          cameraUp * (-event.focalPointDelta.dy * 0.01);
+
+                  // 旋转四元数
+                  var rotationDelta = vm.Quaternion.axisAngle(cameraUp,
+                      vm.radians((event.rotation - lastRotation) * 50));
+                  lastRotation = event.rotation;
+
+                  // // 缩放比例差值
+                  var scaleDiff = (event.scale - lastScale);
+                  lastScale = event.scale;
+                  developer.log("scaleDiff: $scaleDiff");
 
                   models[_selectedModelIndex!].transform(
                       _selectedModelInstanceIndex!,
-                      vm.Matrix4.translation(delta * 0.01));
+                      positionDelta,
+                      rotationDelta,
+                      scaleDiff);
                 }),
               ),
               // Container(
@@ -481,9 +500,7 @@ class _TossMasterState extends State<TossMaster> with WidgetsBindingObserver {
               icon: const Icon(Icons.add),
               onPressed: _selectedModelIndex != null
                   ? () {
-                      models[_selectedModelIndex!].instantiate(
-                          flutterGlPlugin.gl,
-                          vm.Matrix4.translation(vm.Vector3(0, 0, 0)));
+                      models[_selectedModelIndex!].instantiate();
                     }
                   : null,
               label: const Text('添加实例'),
@@ -885,7 +902,7 @@ void main(void)
 
   if(flag == 1)
     // highlight selected model
-    fragColor = vec4(1.0, 0.0, 0.0, 1.0);
+    fragColor = vec4(vec3(1.0, 0.0, 0.0) * (ambient + diffuse + specular), 1.0);
   else
     fragColor = vec4(textureColor.xyz * (ambient + diffuse + specular), textureColor.a);
 }
