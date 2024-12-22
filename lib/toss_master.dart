@@ -200,8 +200,8 @@ class _TossMasterState extends State<TossMaster> with WidgetsBindingObserver {
   late double height;
   // 离屏渲染用
   dynamic sourceTexture;
-  dynamic defaultFramebuffer;
-  dynamic defaultFramebufferTexture;
+  dynamic defaultFbo;
+  dynamic defaultFboTex;
   // 背景用
   late int bgVao;
   List<dynamic> bgVbo = [];
@@ -213,6 +213,7 @@ class _TossMasterState extends State<TossMaster> with WidgetsBindingObserver {
   late int sceneProgram;
   late vm.Vector3 cameraPos, cameraFront, cameraUp;
   late vm.Matrix4 pMat;
+  dynamic sceneTexture;
   //sphere.Sphere mySphere = sphere.Sphere();
 
   int t = DateTime.now().millisecondsSinceEpoch;
@@ -290,6 +291,7 @@ class _TossMasterState extends State<TossMaster> with WidgetsBindingObserver {
   renderBackground() {
     final gl = flutterGlPlugin.gl;
     gl.useProgram(bgProgram);
+    gl.disable(gl.DEPTH_TEST);
     // 绑定纹理
     gl.bindTexture(gl.TEXTURE_2D, bgTexture);
     // 传递纹理数据
@@ -368,8 +370,31 @@ class _TossMasterState extends State<TossMaster> with WidgetsBindingObserver {
         Float32List.fromList(nvalues), gl.STATIC_DRAW);
 
     // **********
-    // 顶点
+    // 纹理
     // **********
+    late imglib.Image texture;
+    result = await FilePicker.platform.pickFiles();
+    if (result != null) {
+      developer.log("selected file: ${result.files.single.path}");
+      texture = imglib
+          .decodeImage(File(result.files.single.path!).readAsBytesSync())!
+          .convert(numChannels: 4);
+    }
+    var textureData = NativeUint8Array.from(texture.toUint8List());
+    if (textureData.length != texture.width * texture.height * 4) {
+      developer.log("textureData length error");
+      developer
+          .log("texture: ${texture.width}x${texture.height} ${texture.format}");
+      developer.log("textureData: ${textureData.length}");
+    }
+    sceneTexture = gl.createTexture();
+    gl.bindTexture(gl.TEXTURE_2D, sceneTexture);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, texture.width, texture.height, 0,
+        gl.RGBA, gl.UNSIGNED_BYTE, textureData);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
 
     // **********
     // 着色器
@@ -383,13 +408,13 @@ class _TossMasterState extends State<TossMaster> with WidgetsBindingObserver {
     var vs = """#version $version
 
 layout (location = 0) in vec3 vertPos;
-//layout (location = 1) in vec2 tex_coord;
+layout (location = 1) in vec2 tex_coord;
 layout (location = 2) in vec3 vertNormal;
 out vec3 varyingNormal;
 out vec3 varyingLightDir;
 out vec3 varyingVertPos;
 out vec3 varyingHalfVector;
-//out vec2 tc;
+out vec2 tc;
 
 struct PositionalLight
 {	vec4 ambient;
@@ -410,7 +435,7 @@ uniform Material material;
 uniform mat4 mv_matrix;
 uniform mat4 proj_matrix;
 uniform mat4 norm_matrix;
-//layout (binding=0) uniform sampler2D s;
+layout (binding=0) uniform sampler2D s;
 
 void main(void)
 {	varyingVertPos = (mv_matrix * vec4(vertPos,1.0)).xyz;
@@ -422,7 +447,7 @@ void main(void)
 		+ normalize(-varyingVertPos)).xyz;
 
 	gl_Position = proj_matrix * mv_matrix * vec4(vertPos,1.0);
-	//tc = tex_coord;
+	tc = tex_coord;
 }
 
 """;
@@ -433,6 +458,7 @@ in vec3 varyingNormal;
 in vec3 varyingLightDir;
 in vec3 varyingVertPos;
 in vec3 varyingHalfVector;
+in vec2 tc;
 
 out vec4 fragColor;
 
@@ -456,29 +482,31 @@ uniform Material material;
 uniform mat4 mv_matrix;
 uniform mat4 proj_matrix;
 uniform mat4 norm_matrix;
+layout (binding=0) uniform sampler2D s;
 
 void main(void)
 {	// normalize the light, normal, and view vectors:
-	vec3 L = normalize(varyingLightDir);
-	vec3 N = normalize(varyingNormal);
-	vec3 V = normalize(-varyingVertPos);
+	// vec3 L = normalize(varyingLightDir);
+	// vec3 N = normalize(varyingNormal);
+	// vec3 V = normalize(-varyingVertPos);
 
-	// get the angle between the light and surface normal:
-	float cosTheta = dot(L,N);
+	// // get the angle between the light and surface normal:
+	// float cosTheta = dot(L,N);
 
-	// halfway vector varyingHalfVector was computed in the vertex shader,
-	// and interpolated prior to reaching the fragment shader.
-	// It is copied into variable H here for convenience later.
-	vec3 H = normalize(varyingHalfVector);
+	// // halfway vector varyingHalfVector was computed in the vertex shader,
+	// // and interpolated prior to reaching the fragment shader.
+	// // It is copied into variable H here for convenience later.
+	// vec3 H = normalize(varyingHalfVector);
 
-	// get angle between the normal and the halfway vector
-	float cosPhi = dot(H,N);
+	// // get angle between the normal and the halfway vector
+	// float cosPhi = dot(H,N);
 
-	// compute ADS contributions (per pixel):
-	vec3 ambient = ((globalAmbient * material.ambient) + (light.ambient * material.ambient)).xyz;
-	vec3 diffuse = light.diffuse.xyz * material.diffuse.xyz * max(cosTheta,0.0);
-	vec3 specular = light.specular.xyz * material.specular.xyz * pow(max(cosPhi,0.0), material.shininess*3.0);
-	fragColor = vec4((ambient + diffuse + specular), 1.0);
+	// // compute ADS contributions (per pixel):
+	// vec3 ambient = ((globalAmbient * material.ambient) + (light.ambient * material.ambient)).xyz;
+	// vec3 diffuse = light.diffuse.xyz * material.diffuse.xyz * max(cosTheta,0.0);
+	// vec3 specular = light.specular.xyz * material.specular.xyz * pow(max(cosPhi,0.0), material.shininess*3.0);
+	// fragColor = vec4((ambient + diffuse + specular), 1.0);
+  fragColor = texture(s, tc);
 }
 """;
 
@@ -496,18 +524,29 @@ void main(void)
     final gl = flutterGlPlugin.gl;
     gl.useProgram(sceneProgram);
 
+    // 深度测试和剔除
+    gl.enable(gl.DEPTH_TEST);
+    gl.depthFunc(gl.LEQUAL);
+    gl.enable(gl.CULL_FACE);
+    gl.frontFace(gl.CCW);
+
+    // 矩阵统一变量
     var mvLoc = gl.getUniformLocation(sceneProgram, "mv_matrix");
     var projLoc = gl.getUniformLocation(sceneProgram, "proj_matrix");
+    var normLoc = gl.getUniformLocation(sceneProgram, "norm_matrix");
 
+    // 投影矩阵
     pMat =
         vm.makePerspectiveMatrix(vm.radians(fov), width / height, 0.1, 1000.0);
     gl.uniformMatrix4fv(projLoc, false, pMat.storage);
-
+    // 视图矩阵
     var vMat = vm.makeViewMatrix(cameraPos, cameraPos + cameraFront, cameraUp);
-    var mMat = vm.Matrix4.translation(vm.Vector3(0.0, 0.0, 3.0));
+
+    // 模型矩阵
+    var mMat = vm.Matrix4.translation(vm.Vector3(0.0, 0.0, 0.0));
     var mvMat = vMat * mMat;
     gl.uniformMatrix4fv(mvLoc, false, mvMat.storage);
-
+    // 顶点
     gl.bindVertexArray(sceneVao);
     gl.bindBuffer(gl.ARRAY_BUFFER, sceneVbo[0]);
     gl.vertexAttribPointer(0, 3, gl.FLOAT, false, 0, 0);
@@ -518,33 +557,38 @@ void main(void)
     gl.bindBuffer(gl.ARRAY_BUFFER, sceneVbo[2]);
     gl.vertexAttribPointer(2, 3, gl.FLOAT, false, 0, 0);
     gl.enableVertexAttribArray(2);
-
+    // 纹理
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_2D, sceneTexture);
+    // 绘制
     gl.drawArrays(gl.TRIANGLES, 0, models[currentModelIndex].getNumVertices());
   }
 
   render() {
     final gl = flutterGlPlugin.gl;
-    // 清理
     int current = DateTime.now().millisecondsSinceEpoch;
-    gl.viewport(0, 0, (width * dpr).toInt(), (height * dpr).toInt());
     num blue = (sin((current - t) / 200) + 1) / 2;
     num green = (cos((current - t) / 300) + 1) / 2;
     num red = (sin((current - t) / 400) + cos((current - t) / 500) + 2) / 4;
+
+    // 清理
     // gl.clearColor(0.0, 0.0, 0.0, 0.0);
     gl.clearColor(red, green, blue, 1.0);
     gl.clearDepth(1);
     gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
 
-    cameraPos =
-        vm.Vector3(sin(current / 10000) * 10, cos(current / 10000) * 10, 0);
-    cameraFront = vm.Vector3(0.0, 0.0, 0.0) - cameraPos;
-    cameraUp = vm.Vector3(
-        sin(current / 10000 + pi / 2), cos(current / 10000 + pi / 2), 0);
+    // 离屏渲染：设置绘图区域为 FBO 大小
+    gl.viewport(0, 0, (width * dpr).toInt(), (height * dpr).toInt());
 
     // 绘制
     if (cameraData != null) {
       renderBackground();
     }
+    cameraPos =
+        vm.Vector3(sin(current / 1000) * 10, cos(current / 1000) * 10, 0);
+    cameraFront = vm.Vector3(0.0, 0.0, 0.0) - cameraPos;
+    cameraUp = vm.Vector3(
+        sin(current / 1000 + pi / 2), cos(current / 1000 + pi / 2), 0);
     renderScene();
 
     // 上屏
@@ -640,7 +684,7 @@ void main(void)
       await flutterGlPlugin.prepareContext();
 
       setupDefaultFBO();
-      sourceTexture = defaultFramebufferTexture;
+      sourceTexture = defaultFboTex;
     }
 
     setState(() {});
@@ -780,19 +824,26 @@ void main(void)
 
     developer.log("glWidth: $glWidth glHeight: $glHeight ");
 
-    defaultFramebuffer = gl.createFramebuffer();
-    defaultFramebufferTexture = gl.createTexture();
+    // 离屏渲染用 FBO
+    defaultFbo = gl.createFramebuffer();
+    gl.bindFramebuffer(gl.FRAMEBUFFER, defaultFbo);
+    // 颜色纹理附件
+    defaultFboTex = gl.createTexture();
     gl.activeTexture(gl.TEXTURE0);
-
-    gl.bindTexture(gl.TEXTURE_2D, defaultFramebufferTexture);
+    gl.bindTexture(gl.TEXTURE_2D, defaultFboTex);
     gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, glWidth, glHeight, 0, gl.RGBA,
         gl.UNSIGNED_BYTE, null);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
-
-    gl.bindFramebuffer(gl.FRAMEBUFFER, defaultFramebuffer);
-    gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D,
-        defaultFramebufferTexture, 0);
+    gl.framebufferTexture2D(
+        gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, defaultFboTex, 0);
+    // 缓冲对象附件
+    var defaultFboRbo = gl.createRenderbuffer();
+    gl.bindRenderbuffer(gl.RENDERBUFFER, defaultFboRbo);
+    gl.renderbufferStorage(gl.RENDERBUFFER, gl.DEPTH24_STENCIL8, glWidth,
+        glHeight);
+    gl.framebufferRenderbuffer(gl.FRAMEBUFFER, gl.DEPTH_STENCIL_ATTACHMENT,
+        gl.RENDERBUFFER, defaultFboRbo);
   }
 
   // ********************
