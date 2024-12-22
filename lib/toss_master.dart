@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 import 'dart:math';
+import 'dart:collection';
 import 'dart:developer' as developer;
 
 import 'package:flutter/foundation.dart';
@@ -126,17 +127,17 @@ class _TossMasterState extends State<TossMaster> with WidgetsBindingObserver {
                 segments: const <ButtonSegment<Mode>>[
                   ButtonSegment<Mode>(
                     value: Mode.editCamera,
-                    label: Text('相机编辑'),
+                    label: Text('相机'),
                     icon: Icon(Icons.camera),
                   ),
                   ButtonSegment<Mode>(
                     value: Mode.editScene,
-                    label: Text('场景编辑'),
+                    label: Text('场景'),
                     icon: Icon(Icons.edit),
                   ),
                   ButtonSegment<Mode>(
                     value: Mode.editLight,
-                    label: Text('光照编辑'),
+                    label: Text('光照'),
                     icon: Icon(Icons.lightbulb),
                   ),
                   ButtonSegment<Mode>(
@@ -157,6 +158,8 @@ class _TossMasterState extends State<TossMaster> with WidgetsBindingObserver {
     );
   }
 
+  final Queue<Timer> _timers = Queue<Timer>();
+
   Widget get _modeWidget {
     switch (_mode) {
       // 相机编辑模式：串流、三轴位移和旋转
@@ -168,109 +171,213 @@ class _TossMasterState extends State<TossMaster> with WidgetsBindingObserver {
             onPressed: streamCameraImage,
             label: const Text('相机串流'),
           ),
-          // 前进后退
-          // Text('cameraFront: $cameraFront'),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-            ElevatedButton.icon(
-              icon: const Icon(Icons.zoom_out_map),
-              onPressed: () {
-                var tmp = cameraFront;
-                tmp.normalize();
-                tmp.scale(cameraVelocity);
-                cameraPos += tmp;
-                setState(() {});
+          // 速度调整
+          Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+            GestureDetector(
+              child: ElevatedButton.icon(
+                icon: const Icon(Icons.fast_rewind),
+                onPressed: () {},
+                label: const Text('减速'),
+              ),
+              onTapDown: (_) {
+                _timers.addLast(
+                    Timer.periodic(const Duration(milliseconds: 100), (_) {
+                  developer.log('Timer');
+                  cameraVelocity -= 0.01;
+                  setState(() {});
+                }));
               },
-              label: const Text('前进'),
+              onTapCancel: () {
+                if (_timers.isNotEmpty) _timers.removeFirst().cancel();
+              },
             ),
-            ElevatedButton.icon(
-              icon: const Icon(Icons.zoom_in_map),
-              onPressed: () {
-                var tmp = cameraFront;
-                tmp.normalize();
-                tmp.scale(cameraVelocity);
-                cameraPos -= tmp;
-                setState(() {});
+            GestureDetector(
+              child: ElevatedButton.icon(
+                icon: const Icon(Icons.fast_forward),
+                onPressed: () {},
+                label: const Text('加速'),
+              ),
+              onTapDown: (_) {
+                _timers.addLast(
+                    Timer.periodic(const Duration(milliseconds: 100), (_) {
+                  developer.log('Timer');
+                  cameraVelocity += 0.01;
+                  setState(() {});
+                }));
               },
-              label: const Text('后退'),
+              onTapCancel: () {
+                if (_timers.isNotEmpty) _timers.removeFirst().cancel();
+              },
+            ),
+          ]),
+          // 前进后退
+          Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+            GestureDetector(
+              child: ElevatedButton.icon(
+                icon: const Icon(Icons.zoom_out_map),
+                onPressed: () {},
+                label: const Text('前进'),
+              ),
+              onTapDown: (_) {
+                _timers.addLast(
+                    Timer.periodic(const Duration(milliseconds: 100), (_) {
+                  var tmp = cameraFront;
+                  tmp.normalize();
+                  tmp.scale(cameraVelocity);
+                  cameraPos += tmp;
+                  setState(() {});
+                }));
+              },
+              onTapCancel: () {
+                if (_timers.isNotEmpty) _timers.removeFirst().cancel();
+              },
+            ),
+            GestureDetector(
+              child: ElevatedButton.icon(
+                icon: const Icon(Icons.zoom_in_map),
+                onPressed: () {},
+                label: const Text('后退'),
+              ),
+              onTapDown: (_) {
+                _timers.addLast(
+                    Timer.periodic(const Duration(milliseconds: 100), (_) {
+                  var tmp = cameraFront;
+                  tmp.normalize();
+                  tmp.scale(cameraVelocity);
+                  cameraPos -= tmp;
+                  setState(() {});
+                }));
+              },
+              onTapCancel: () {
+                if (_timers.isNotEmpty) _timers.removeFirst().cancel();
+              },
             ),
           ]),
           // 上下
-          // Text('cameraUp: $cameraUp'),
           Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-            ElevatedButton.icon(
-              icon: const Icon(Icons.arrow_upward),
-              onPressed: () {
-                var tmp = cameraUp;
-                tmp.normalize();
-                tmp.scale(cameraVelocity);
-                cameraPos += tmp;
-                setState(() {});
+            GestureDetector(
+              child: ElevatedButton.icon(
+                icon: const Icon(Icons.arrow_upward),
+                onPressed: () {},
+                label: const Text('上升'),
+              ),
+              onTapDown: (_) {
+                _timers.addLast(
+                    Timer.periodic(const Duration(milliseconds: 100), (_) {
+                  var tmp = cameraUp;
+                  tmp.normalize();
+                  tmp.scale(cameraVelocity);
+                  cameraPos += tmp;
+                  setState(() {});
+                }));
               },
-              label: const Text('上升'),
+              onTapCancel: () {
+                if (_timers.isNotEmpty) _timers.removeFirst().cancel();
+              },
             ),
-            ElevatedButton.icon(
-              icon: const Icon(Icons.arrow_downward),
-              onPressed: () {
-                var tmp = cameraUp;
-                tmp.normalize();
-                tmp.scale(cameraVelocity);
-                cameraPos -= tmp;
-                setState(() {});
+            GestureDetector(
+              child: ElevatedButton.icon(
+                icon: const Icon(Icons.arrow_downward),
+                onPressed: () {},
+                label: const Text('下降'),
+              ),
+              onTapDown: (_) {
+                _timers.addLast(
+                    Timer.periodic(const Duration(milliseconds: 100), (_) {
+                  var tmp = cameraUp;
+                  tmp.normalize();
+                  tmp.scale(cameraVelocity);
+                  cameraPos -= tmp;
+                  setState(() {});
+                }));
               },
-              label: const Text('下降'),
+              onTapCancel: () {
+                if (_timers.isNotEmpty) _timers.removeFirst().cancel();
+              },
             ),
           ]),
           // 左右
-          // Text('cameraRight: ${cameraFront.cross(cameraUp)}'),
           Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-            ElevatedButton.icon(
-              icon: const Icon(Icons.arrow_back),
-              onPressed: () {
-                var carmeraRight = cameraFront.cross(cameraUp);
-                carmeraRight.normalize();
-                carmeraRight.scale(cameraVelocity);
-                cameraPos += carmeraRight;
-                setState(() {});
+            GestureDetector(
+              child: ElevatedButton.icon(
+                icon: const Icon(Icons.arrow_back),
+                onPressed: () {},
+                label: const Text('左移'),
+              ),
+              onTapDown: (_) {
+                _timers.addLast(
+                    Timer.periodic(const Duration(milliseconds: 100), (_) {
+                  var carmeraRight = cameraFront.cross(cameraUp);
+                  carmeraRight.normalize();
+                  carmeraRight.scale(cameraVelocity);
+                  cameraPos += carmeraRight;
+                  setState(() {});
+                }));
               },
-              label: const Text('左移'),
+              onTapCancel: () {
+                if (_timers.isNotEmpty) _timers.removeFirst().cancel();
+              },
             ),
-            ElevatedButton.icon(
-              icon: const Icon(Icons.arrow_forward),
-              onPressed: () {
-                var carmeraRight = cameraFront.cross(cameraUp);
-                carmeraRight.normalize();
-                carmeraRight.scale(cameraVelocity);
-                cameraPos -= carmeraRight;
-                setState(() {});
+            GestureDetector(
+              child: ElevatedButton.icon(
+                icon: const Icon(Icons.arrow_forward),
+                onPressed: () {},
+                label: const Text('右移'),
+              ),
+              onTapDown: (_) {
+                _timers.addLast(
+                    Timer.periodic(const Duration(milliseconds: 100), (_) {
+                  var carmeraRight = cameraFront.cross(cameraUp);
+                  carmeraRight.normalize();
+                  carmeraRight.scale(cameraVelocity);
+                  cameraPos -= carmeraRight;
+                  setState(() {});
+                }));
               },
-              label: const Text('右移'),
+              onTapCancel: () {
+                if (_timers.isNotEmpty) _timers.removeFirst().cancel();
+              },
             ),
           ]),
           // 水平旋转
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-            ElevatedButton.icon(
-              icon: const Icon(Icons.rotate_left),
-              onPressed: () {
-                var tmp = vm.Matrix4.identity();
-                tmp.rotate(cameraUp, vm.radians(5.0));
-                cameraFront = tmp.transform3(cameraFront);
-                setState(() {});
+          Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+            GestureDetector(
+              child: ElevatedButton.icon(
+                icon: const Icon(Icons.rotate_left),
+                onPressed: () {},
+                label: const Text('左转'),
+              ),
+              onTapDown: (_) {
+                _timers.addLast(
+                    Timer.periodic(const Duration(milliseconds: 100), (_) {
+                  var tmp = vm.Matrix4.identity();
+                  tmp.rotate(cameraUp, vm.radians(5.0 * cameraVelocity));
+                  cameraFront = tmp.transform3(cameraFront);
+                  setState(() {});
+                }));
               },
-              label: const Text('左转'),
+              onTapCancel: () {
+                if (_timers.isNotEmpty) _timers.removeFirst().cancel();
+              },
             ),
-            ElevatedButton.icon(
-              icon: const Icon(Icons.rotate_right),
-              onPressed: () {
-                var tmp = vm.Matrix4.identity();
-                tmp.rotate(cameraUp, vm.radians(-5.0));
-                cameraFront = tmp.transform3(cameraFront);
-                setState(() {});
+            GestureDetector(
+              child: ElevatedButton.icon(
+                icon: const Icon(Icons.rotate_right),
+                onPressed: () {},
+                label: const Text('右转'),
+              ),
+              onTapDown: (_) {
+                _timers.addLast(
+                    Timer.periodic(const Duration(milliseconds: 100), (_) {
+                  var tmp = vm.Matrix4.identity();
+                  tmp.rotate(cameraUp, vm.radians(-5.0 * cameraVelocity));
+                  cameraFront = tmp.transform3(cameraFront);
+                  setState(() {});
+                }));
               },
-              label: const Text('右转'),
+              onTapCancel: () {
+                if (_timers.isNotEmpty) _timers.removeFirst().cancel();
+              },
             ),
           ]),
         ]);
@@ -503,6 +610,7 @@ class _TossMasterState extends State<TossMaster> with WidgetsBindingObserver {
     models[0].instantiate(gl, vm.Matrix4.translation(vm.Vector3(2, 0, 0)));
     models[0].instantiate(gl, vm.Matrix4.translation(vm.Vector3(0, 2, 0)));
 
+
     // **********
     // 着色器
     // **********
@@ -517,12 +625,14 @@ class _TossMasterState extends State<TossMaster> with WidgetsBindingObserver {
 layout (location = 0) in vec3 vertPos;
 layout (location = 1) in vec2 tex_coord;
 layout (location = 2) in vec3 vertNormal;
-layout (location = 3) in mat4 m_matrix;
+layout (location = 3) in mat4 instanceMatrix;
+layout (location = 7) in int instanceFlag;
 out vec3 varyingNormal;
 out vec3 varyingLightDir;
 out vec3 varyingVertPos;
 out vec3 varyingHalfVector;
 out vec2 tc;
+flat out int flag;
 
 struct PositionalLight
 {	vec4 ambient;
@@ -546,7 +656,7 @@ uniform mat4 norm_matrix;
 layout (binding=0) uniform sampler2D s;
 
 void main(void)
-{	varyingVertPos = (v_matrix * m_matrix * vec4(vertPos,1.0)).xyz;
+{	varyingVertPos = (v_matrix * instanceMatrix * vec4(vertPos,1.0)).xyz;
 	varyingLightDir = light.position - varyingVertPos;
 	varyingNormal = (norm_matrix * vec4(vertNormal,1.0)).xyz;
 
@@ -554,8 +664,9 @@ void main(void)
 		normalize(normalize(varyingLightDir)
 		+ normalize(-varyingVertPos)).xyz;
 
-	gl_Position = proj_matrix * v_matrix * m_matrix * vec4(vertPos,1.0);
+	gl_Position = proj_matrix * v_matrix * instanceMatrix * vec4(vertPos,1.0);
 	tc = tex_coord;
+  flag = instanceFlag;
 }
 
 """;
@@ -567,6 +678,7 @@ in vec3 varyingLightDir;
 in vec3 varyingVertPos;
 in vec3 varyingHalfVector;
 in vec2 tc;
+flat in int flag;
 
 out vec4 fragColor;
 
@@ -614,7 +726,11 @@ void main(void)
 	// vec3 diffuse = light.diffuse.xyz * material.diffuse.xyz * max(cosTheta,0.0);
 	// vec3 specular = light.specular.xyz * material.specular.xyz * pow(max(cosPhi,0.0), material.shininess*3.0);
 	// fragColor = vec4((ambient + diffuse + specular), 1.0);
-  fragColor = texture(s, tc);
+  if(flag == 1)
+    // highlight selected model
+    fragColor = vec4(1.0, 0.0, 0.0, 1.0);
+  else
+    fragColor = texture(s, tc);
 }
 """;
 

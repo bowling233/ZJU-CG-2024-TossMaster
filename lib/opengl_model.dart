@@ -6,13 +6,17 @@ import 'package:vector_math/vector_math.dart';
 import 'package:image/image.dart';
 
 class ImportedModel {
+  // 模型数据
   final int numVertices;
-  final List<Matrix4> modelMatrix = [];
   List<double> vertices;
-  final List<bool> selected = [];
   final int vao;
   final List<dynamic> vbo;
   final int texture;
+  // 实例数据
+  // final List<Vector3> instancePosition = [];
+  final List<Vector3> instanceVelocity = [];
+  final List<Matrix4> instanceMatrix = [];
+  final List<int> instanceFlag = [];
 
   factory ImportedModel(gl, String objPath, String texPath) {
     // 顶点数据：解析 OBJ 文件
@@ -70,8 +74,9 @@ class ImportedModel {
     final vao = gl.createVertexArray();
     gl.bindVertexArray(vao);
 
-    final vbo = List.generate(4, (i) => gl.createBuffer());
-    // 0. vertex 1. texture 2. normal 3. m_matrix
+    final vbo = List.generate(5, (i) => gl.createBuffer());
+    // 0. vertex 1. texture 2. normal 3. instanceMatrix (4) 7. instanceFlag
+
     gl.bindBuffer(gl.ARRAY_BUFFER, vbo[0]);
     gl.bufferData(
         gl.ARRAY_BUFFER,
@@ -80,6 +85,7 @@ class ImportedModel {
         gl.STATIC_DRAW);
     gl.vertexAttribPointer(0, 3, gl.FLOAT, false, 0, 0);
     gl.enableVertexAttribArray(0);
+
     gl.bindBuffer(gl.ARRAY_BUFFER, vbo[1]);
     gl.bufferData(
         gl.ARRAY_BUFFER,
@@ -88,14 +94,16 @@ class ImportedModel {
         gl.STATIC_DRAW);
     gl.vertexAttribPointer(1, 2, gl.FLOAT, false, 0, 0);
     gl.enableVertexAttribArray(1);
+
     gl.bindBuffer(gl.ARRAY_BUFFER, vbo[2]);
     gl.bufferData(gl.ARRAY_BUFFER, normals.length * Float32List.bytesPerElement,
         Float32List.fromList(normals), gl.STATIC_DRAW);
     gl.vertexAttribPointer(2, 3, gl.FLOAT, false, 0, 0);
     gl.enableVertexAttribArray(2);
+
+    // 注意：实例数据在渲染时传入
     // 注意：matrix 特殊，vetexAttribPointer 大小最多为 4，需要用 Stride 来实现
     gl.bindBuffer(gl.ARRAY_BUFFER, vbo[3]);
-    // 注意：实例数据在渲染时传入
     gl.vertexAttribPointer(
         3, 4, gl.FLOAT, false, 16 * Float32List.bytesPerElement, 0);
     gl.vertexAttribDivisor(3, 1);
@@ -113,6 +121,11 @@ class ImportedModel {
     gl.vertexAttribDivisor(6, 1);
     gl.enableVertexAttribArray(6);
 
+    gl.bindBuffer(gl.ARRAY_BUFFER, vbo[4]);
+    gl.vertexAttribPointer(7, 1, gl.INT, false, 0, 0);
+    gl.vertexAttribDivisor(7, 1);
+    gl.enableVertexAttribArray(7);
+
     // 纹理数据
     var img =
         decodeImage(File(texPath).readAsBytesSync())!.convert(numChannels: 4);
@@ -127,14 +140,16 @@ class ImportedModel {
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
 
-    return ImportedModel._internal(numVertices, vao, vbo, texture, triangleVerts);
+    return ImportedModel._internal(
+        numVertices, vao, vbo, texture, triangleVerts);
   }
 
-  ImportedModel._internal(this.numVertices, this.vao, this.vbo, this.texture, this.vertices);
+  ImportedModel._internal(
+      this.numVertices, this.vao, this.vbo, this.texture, this.vertices);
 
   void instantiate(gl, Matrix4 modelMatrix) {
-    this.modelMatrix.add(modelMatrix);
-    selected.add(false);
+    instanceMatrix.add(modelMatrix);
+    instanceFlag.add(0);
   }
 
   // 渲染
@@ -145,24 +160,42 @@ class ImportedModel {
     gl.bindBuffer(gl.ARRAY_BUFFER, vbo[1]);
     gl.bindBuffer(gl.ARRAY_BUFFER, vbo[2]);
     // 模型实例矩阵
-    if (modelMatrix.isEmpty) return;
+    if (instanceMatrix.isEmpty) return;
     List<double> mMatrix = [];
-    for (var i = 0; i < modelMatrix.length; i++) {
-      mMatrix.addAll(modelMatrix[i].storage);
+    for (var i = 0; i < instanceMatrix.length; i++) {
+      mMatrix.addAll(instanceMatrix[i].storage);
     }
     gl.bindBuffer(gl.ARRAY_BUFFER, vbo[3]);
     gl.bufferData(gl.ARRAY_BUFFER, mMatrix.length * Float32List.bytesPerElement,
         Float32List.fromList(mMatrix), gl.STATIC_DRAW);
+    // 实例标志
+    gl.bindBuffer(gl.ARRAY_BUFFER, vbo[4]);
+    gl.bufferData(
+        gl.ARRAY_BUFFER,
+        instanceFlag.length * Int32List.bytesPerElement,
+        Int32List.fromList(instanceFlag),
+        gl.STATIC_DRAW);
     // 纹理
     gl.activeTexture(gl.TEXTURE0);
     gl.bindTexture(gl.TEXTURE_2D, texture);
     // 实例化绘制
-    gl.drawArraysInstanced(gl.TRIANGLES, 0, numVertices, modelMatrix.length);
-    log('[ImportedModel.render()] drawArraysInstanced: ${modelMatrix.length}');
+    gl.drawArraysInstanced(gl.TRIANGLES, 0, numVertices, instanceMatrix.length);
+    // log('[ImportedModel.render()] drawArraysInstanced: ${modelMatrix.length}');
+  }
+
+  void select(int index) {
+    log('[ImportedModel.select()] index: $index');
+    instanceFlag[index] = 1;
+  }
+
+  void unSelect() {
+    instanceFlag.fillRange(0, instanceFlag.length, 0);
   }
 
   // 给定 pMat，标准设备坐标，返回选中的模型
-  ({int index,double t}) hisTest(Vector2 ndc, Vector3 cameraPos, Matrix4 vMat, Matrix4 pMat) {
+  ({int index, double t}) hisTest(
+      Vector2 ndc, Vector3 cameraPos, Matrix4 vMat, Matrix4 pMat) {
+    unSelect();
     // 反投影到裁剪空间
     var clipSpacePoint = Vector4(ndc.x, ndc.y, -1, 1);
     // 转换到视图空间
@@ -184,12 +217,15 @@ class ImportedModel {
     int selectedIdx = -1;
     double tMin = double.infinity;
     // 对场景中每个实例
-    for (final model in modelMatrix) {
+    for (final model in instanceMatrix) {
       // 对实例的每个三角形
       for (var i = 0; i < numVertices; i += 3) {
-        var v0 = model.transformed3(Vector3(vertices[i], vertices[i + 1], vertices[i + 2]));
-        var v1 = model.transformed3(Vector3(vertices[i + 3], vertices[i + 4], vertices[i + 5]));
-        var v2 = model.transformed3(Vector3(vertices[i + 6], vertices[i + 7], vertices[i + 8]));
+        var v0 = model.transformed3(
+            Vector3(vertices[i], vertices[i + 1], vertices[i + 2]));
+        var v1 = model.transformed3(
+            Vector3(vertices[i + 3], vertices[i + 4], vertices[i + 5]));
+        var v2 = model.transformed3(
+            Vector3(vertices[i + 6], vertices[i + 7], vertices[i + 8]));
         // 计算交点
         var e1 = v1 - v0;
         var e2 = v2 - v0;
@@ -206,10 +242,11 @@ class ImportedModel {
         var t = f * e2.dot(q);
         if (t > 0.00001 && t < tMin) {
           tMin = t;
-          selectedIdx = modelMatrix.indexOf(model);
+          selectedIdx = instanceMatrix.indexOf(model);
         }
       }
     }
+    if (selectedIdx != -1) select(selectedIdx);
     return (index: selectedIdx, t: tMin);
   }
 }
