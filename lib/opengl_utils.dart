@@ -3,6 +3,11 @@ import 'package:image/image.dart' as imglib;
 import 'package:camera/camera.dart';
 import 'package:vector_math/vector_math.dart';
 
+// *********************************
+// OpenGL 光照
+// *********************************
+
+
 
 // *********************************
 // OpenGL 模型

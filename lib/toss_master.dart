@@ -64,6 +64,7 @@ class TossMaster extends StatefulWidget {
 }
 
 class _TossMasterState extends State<TossMaster> with WidgetsBindingObserver {
+  List<ImportedModel> models = [];
   // ***********************
   // UI
   // - OpenGL 场景
@@ -584,31 +585,48 @@ class _TossMasterState extends State<TossMaster> with WidgetsBindingObserver {
   }
 
   // ***********************
-  // Camera Part
+  // OpenGL 部分
   // ***********************
-
-  // ***********************
-  // OpenGL Part
-  // ***********************
-  // 模型库
-  List<ImportedModel> models = [];
-  int currentModelIndex = 0;
-  // 基本
   late FlutterGlPlugin flutterGlPlugin;
-  int? fboId;
+
+  // 离屏渲染
   num dpr = 1.0;
   Size? screenSize;
   late double width;
   late double height;
-  // 离屏渲染用
   dynamic sourceTexture;
   dynamic defaultFbo;
   dynamic defaultFboTex;
-  // 背景用
-  late int bgVao;
-  List<dynamic> bgVbo = [];
-  late int bgProgram; // 背景着色器
-  dynamic bgTexture;
+  // 创建 FBO 用于离屏渲染
+  setupDefaultFBO() {
+    final gl = flutterGlPlugin.gl;
+    int glWidth = (width * dpr).toInt();
+    int glHeight = (height * dpr).toInt();
+
+    developer.log("glWidth: $glWidth glHeight: $glHeight ");
+
+    // 离屏渲染用 FBO
+    defaultFbo = gl.createFramebuffer();
+    gl.bindFramebuffer(gl.FRAMEBUFFER, defaultFbo);
+    // 颜色纹理附件
+    defaultFboTex = gl.createTexture();
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_2D, defaultFboTex);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, glWidth, glHeight, 0, gl.RGBA,
+        gl.UNSIGNED_BYTE, null);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+    gl.framebufferTexture2D(
+        gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, defaultFboTex, 0);
+    // 缓冲对象附件
+    var defaultFboRbo = gl.createRenderbuffer();
+    gl.bindRenderbuffer(gl.RENDERBUFFER, defaultFboRbo);
+    gl.renderbufferStorage(
+        gl.RENDERBUFFER, gl.DEPTH24_STENCIL8, glWidth, glHeight);
+    gl.framebufferRenderbuffer(gl.FRAMEBUFFER, gl.DEPTH_STENCIL_ATTACHMENT,
+        gl.RENDERBUFFER, defaultFboRbo);
+  }
+
   // 场景用
   late int sceneProgram;
   vm.Vector3 cameraPos = vm.Vector3(0.0, 0.0, 12.0),
@@ -621,10 +639,12 @@ class _TossMasterState extends State<TossMaster> with WidgetsBindingObserver {
 
   int t = DateTime.now().millisecondsSinceEpoch;
 
-  // ********************
-  // OpenGL 部分
-  // ********************
   // 背景
+
+  late int bgVao;
+  List<dynamic> bgVbo = [];
+  late int bgProgram; // 背景着色器
+  dynamic bgTexture;
   prepareBackground() {
     final gl = flutterGlPlugin.gl;
     // 背景着色器
@@ -781,13 +801,16 @@ layout (binding=0) uniform sampler2D s;
 void main(void)
 {	varyingVertPos = (v_matrix * instanceMatrix * vec4(vertPos,1.0)).xyz;
 	varyingLightDir = light.position - varyingVertPos;
-	varyingNormal = (norm_matrix * vec4(vertNormal,1.0)).xyz;
+	// varyingNormal = (norm_matrix * vec4(vertNormal,1.0)).xyz;
+  mat4 mvMat = v_matrix * instanceMatrix;
+  mat4 invTrMat = transpose(inverse(mvMat));
+  varyingNormal = (invTrMat * vec4(vertNormal, 0.0)).xyz;
 
 	varyingHalfVector =
 		normalize(normalize(varyingLightDir)
 		+ normalize(-varyingVertPos)).xyz;
 
-	gl_Position = proj_matrix * v_matrix * instanceMatrix * vec4(vertPos,1.0);
+	gl_Position = proj_matrix * mvMat * vec4(vertPos,1.0);
 	tc = tex_coord;
   flag = instanceFlag;
 }
@@ -828,32 +851,33 @@ uniform mat4 norm_matrix;
 layout (binding=0) uniform sampler2D s;
 
 void main(void)
-{	// normalize the light, normal, and view vectors:
-	// vec3 L = normalize(varyingLightDir);
-	// vec3 N = normalize(varyingNormal);
-	// vec3 V = normalize(-varyingVertPos);
+{ // normalize the light, normal, and view vectors:
+  vec3 L = normalize(varyingLightDir);
+  vec3 N = normalize(varyingNormal);
+  vec3 V = normalize(-varyingVertPos);
 
-	// // get the angle between the light and surface normal:
-	// float cosTheta = dot(L,N);
+  // get the angle between the light and surface normal:
+  float cosTheta = dot(L,N);
 
-	// // halfway vector varyingHalfVector was computed in the vertex shader,
-	// // and interpolated prior to reaching the fragment shader.
-	// // It is copied into variable H here for convenience later.
-	// vec3 H = normalize(varyingHalfVector);
+  // halfway vector varyingHalfVector was computed in the vertex shader,
+  // and interpolated prior to reaching the fragment shader.
+  // It is copied into variable H here for convenience later.
+  vec3 H = normalize(varyingHalfVector);
 
-	// // get angle between the normal and the halfway vector
-	// float cosPhi = dot(H,N);
+  // get angle between the normal and the halfway vector
+  float cosPhi = dot(H,N);
 
-	// // compute ADS contributions (per pixel):
-	// vec3 ambient = ((globalAmbient * material.ambient) + (light.ambient * material.ambient)).xyz;
-	// vec3 diffuse = light.diffuse.xyz * material.diffuse.xyz * max(cosTheta,0.0);
-	// vec3 specular = light.specular.xyz * material.specular.xyz * pow(max(cosPhi,0.0), material.shininess*3.0);
-	// fragColor = vec4((ambient + diffuse + specular), 1.0);
+  // compute ADS contributions (per pixel):
+  vec4 textureColor = texture(s, tc);
+	vec3 ambient = (globalAmbient.xyz + light.ambient.xyz);
+	vec3 diffuse = light.diffuse.xyz * max(cosTheta, 0.0);
+	vec3 specular = light.specular.xyz * pow(max(cosPhi, 0.0), 51.2 * 3.0);
+
   if(flag == 1)
     // highlight selected model
     fragColor = vec4(1.0, 0.0, 0.0, 1.0);
   else
-    fragColor = texture(s, tc);
+    fragColor = vec4(textureColor.xyz * (ambient + diffuse + specular), textureColor.a);
 }
 """;
 
@@ -873,7 +897,6 @@ void main(void)
     // 矩阵统一变量
     var vLoc = gl.getUniformLocation(sceneProgram, "v_matrix");
     var projLoc = gl.getUniformLocation(sceneProgram, "proj_matrix");
-    var normLoc = gl.getUniformLocation(sceneProgram, "norm_matrix");
 
     // 投影矩阵
     pMat =
@@ -886,6 +909,31 @@ void main(void)
     for (final model in models) {
       model.render(gl);
     }
+  }
+
+  // ADS 光照：环境光、漫反射、镜面反射
+  List<double> globalAmbient = [0.7, 0.7, 0.7, 1.0];
+  List<double> lightAmbient = [0.0, 0.0, 0.0, 1.0];
+  List<double> lightDiffuse = [1.0, 1.0, 1.0, 1.0];
+  List<double> lightSpecular = [1.0, 1.0, 1.0, 1.0];
+  vm.Vector3 lightPos = vm.Vector3(5.0, 2.0, 2.0);
+  installLights() {
+    final gl = flutterGlPlugin.gl;
+    var transformed = vMat.transform3(vm.Vector3.copy(lightPos));
+
+    final globalAmbLoc = gl.getUniformLocation(sceneProgram, "globalAmbient");
+    final ambLoc = gl.getUniformLocation(sceneProgram, "light.ambient");
+    final diffLoc = gl.getUniformLocation(sceneProgram, "light.diffuse");
+    final specLoc = gl.getUniformLocation(sceneProgram, "light.specular");
+    final posLoc = gl.getUniformLocation(sceneProgram, "light.position");
+
+    gl.useProgram(sceneProgram);
+
+    gl.uniform4fv(globalAmbLoc, NativeFloat32Array.from(globalAmbient));
+    gl.uniform4fv(ambLoc, NativeFloat32Array.from(lightAmbient));
+    gl.uniform4fv(diffLoc, NativeFloat32Array.from(lightDiffuse));
+    gl.uniform4fv(specLoc, NativeFloat32Array.from(lightSpecular));
+    gl.uniform3fv(posLoc, transformed.storage);
   }
 
   render() {
@@ -908,13 +956,23 @@ void main(void)
     if (cameraData != null) {
       renderBackground();
     }
+    installLights();
     renderScene();
+    // renderSphere();
 
     // 上屏
     gl.finish();
     if (!kIsWeb) {
       flutterGlPlugin.updateTexture(sourceTexture);
     }
+  }
+
+  animate() {
+    render();
+
+    Future.delayed(const Duration(milliseconds: 33), () {
+      animate();
+    });
   }
 
   // ********************
@@ -1073,47 +1131,5 @@ void main(void)
                 : Container();
           }
         }));
-  }
-
-  // 创建 FBO 用于离屏渲染
-  setupDefaultFBO() {
-    final gl = flutterGlPlugin.gl;
-    int glWidth = (width * dpr).toInt();
-    int glHeight = (height * dpr).toInt();
-
-    developer.log("glWidth: $glWidth glHeight: $glHeight ");
-
-    // 离屏渲染用 FBO
-    defaultFbo = gl.createFramebuffer();
-    gl.bindFramebuffer(gl.FRAMEBUFFER, defaultFbo);
-    // 颜色纹理附件
-    defaultFboTex = gl.createTexture();
-    gl.activeTexture(gl.TEXTURE0);
-    gl.bindTexture(gl.TEXTURE_2D, defaultFboTex);
-    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, glWidth, glHeight, 0, gl.RGBA,
-        gl.UNSIGNED_BYTE, null);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
-    gl.framebufferTexture2D(
-        gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, defaultFboTex, 0);
-    // 缓冲对象附件
-    var defaultFboRbo = gl.createRenderbuffer();
-    gl.bindRenderbuffer(gl.RENDERBUFFER, defaultFboRbo);
-    gl.renderbufferStorage(
-        gl.RENDERBUFFER, gl.DEPTH24_STENCIL8, glWidth, glHeight);
-    gl.framebufferRenderbuffer(gl.FRAMEBUFFER, gl.DEPTH_STENCIL_ATTACHMENT,
-        gl.RENDERBUFFER, defaultFboRbo);
-  }
-
-  // ********************
-  // Animate
-  // ********************
-
-  animate() {
-    render();
-
-    Future.delayed(const Duration(milliseconds: 33), () {
-      animate();
-    });
   }
 }
