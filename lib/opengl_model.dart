@@ -251,4 +251,8 @@ class ImportedModel {
     if (selectedIdx != -1) select(selectedIdx);
     return (index: selectedIdx, t: tMin);
   }
+
+  void transform(int index, Matrix4 transform) {
+    instanceMatrix[index] *= transform;
+  }
 }

@@ -57,7 +57,6 @@ class _TossMasterState extends State<TossMaster> with WidgetsBindingObserver {
   // ***********************
   Mode _mode = Mode.editCamera;
   // imglib.Image? testData;
-  PointerEvent? _pointerEvent;
   int? _selectedModelIndex, _selectedModelInstanceIndex;
   double tMin = double.infinity;
 
@@ -73,10 +72,18 @@ class _TossMasterState extends State<TossMaster> with WidgetsBindingObserver {
             mainAxisAlignment: MainAxisAlignment.start,
             children: <Widget>[
               // OpenGL 场景
-              Listener(
+              GestureDetector(
                 child: _build(context),
-                onPointerDown: (PointerDownEvent event) => setState(() {
-                  _pointerEvent = event;
+                // 单击：选中/取消选中物体
+                onTapUp: (TapUpDetails event) => setState(() {
+                  developer.log("onTapUp");
+                  // 如果已选中特定实例，则取消选中
+                  if (_selectedModelIndex != null &&
+                      _selectedModelInstanceIndex != null) {
+                    models[_selectedModelIndex!].unSelect();
+                    _selectedModelInstanceIndex = null;
+                    return;
+                  }
 
                   // 重置选中结果
                   _selectedModelIndex = _selectedModelInstanceIndex = null;
@@ -99,16 +106,28 @@ class _TossMasterState extends State<TossMaster> with WidgetsBindingObserver {
                     }
                   }
                 }),
-                onPointerMove: (PointerMoveEvent event) =>
-                    setState(() => _pointerEvent = event),
-                onPointerUp: (PointerUpEvent event) =>
-                    setState(() => _pointerEvent = event),
+                // 拖动：移动物体
+                onPanUpdate: (DragUpdateDetails event) => setState(() {
+                  developer
+                      .log("onPanUpdate ${event.localPosition} ${event.delta}");
+                  // 要求已选中特定实例
+                  if (_selectedModelIndex == null ||
+                      _selectedModelInstanceIndex == null) {
+                    return;
+                  }
+
+                  // 移动物体，参考相机坐标系
+                  var cameraRight = cameraFront.cross(cameraUp);
+                  cameraRight.normalize();
+                  var delta = cameraRight * (event.delta.dx) +
+                      cameraUp * (-event.delta.dy);
+
+                  models[_selectedModelIndex!].transform(
+                      _selectedModelInstanceIndex!,
+                      vm.Matrix4.translation(delta * 0.01));
+                }),
               ),
               // Container(
-              //     //child: testData != null
-              //     //    ? Image.memory(imglib.encodePng(testData!),
-              //     //        width: 100, height: 100)
-              //     //    : const Placeholder()),
               //     child: _pointerEvent != null
               //         ? Column(children: [
               //             Text(
@@ -156,11 +175,35 @@ class _TossMasterState extends State<TossMaster> with WidgetsBindingObserver {
     );
   }
 
+  importModel(gl) async {
+    late String objPath, texPath;
+    String? gifPath;
+
+    FilePickerResult? result = await FilePicker.platform.pickFiles();
+    if (result != null) {
+      objPath = result.files.single.path!;
+    }
+
+    result = await FilePicker.platform.pickFiles();
+    if (result != null) {
+      texPath = result.files.single.path!;
+    }
+
+    result = await FilePicker.platform.pickFiles();
+    if (result != null) {
+      gifPath = result.files.single.path!;
+    }
+
+    models.add(ImportedModel(gl, objPath, texPath, gifPath: gifPath));
+    setState(() {});
+  }
+
   final Queue<Timer> _timers = Queue<Timer>();
 
   startMoveVector(vm.Vector3 v, vm.Vector3 dir, double vol) {
     _timers.addLast(Timer.periodic(const Duration(milliseconds: 100), (_) {
       v = moveVector(v, dir, vol);
+      setState(() {});
     }));
   }
 
@@ -172,13 +215,21 @@ class _TossMasterState extends State<TossMaster> with WidgetsBindingObserver {
     switch (_mode) {
       // 相机编辑模式：串流、三轴位移和旋转
       case Mode.editCamera:
-        return Column(children: <Widget>[
+        return Scrollbar(
+            child: SingleChildScrollView(
+                child: Column(children: <Widget>[
           // 串流控制
           ElevatedButton.icon(
             icon: const Icon(Icons.camera),
             onPressed: streamCameraImage,
             label: const Text('相机串流'),
           ),
+          // 调试：相机参数
+          // Text("cameraPos: $cameraPos"),
+          // Text("cameraFront: $cameraFront"),
+          // Text("cameraUp: $cameraUp"),
+          // Text("cameraVelocity: $cameraVelocity"),
+          // 速度调整
           // 速度调整
           Row(mainAxisAlignment: MainAxisAlignment.center, children: [
             GestureDetector(
@@ -191,7 +242,7 @@ class _TossMasterState extends State<TossMaster> with WidgetsBindingObserver {
                 _timers.addLast(
                     Timer.periodic(const Duration(milliseconds: 100), (_) {
                   cameraVelocity -= 0.01;
-                  if (cameraVelocity < 0.0) cameraVelocity = 0.0;
+                  setState(() {});
                 }));
               },
               onTapCancel: () {
@@ -208,6 +259,7 @@ class _TossMasterState extends State<TossMaster> with WidgetsBindingObserver {
                 _timers.addLast(
                     Timer.periodic(const Duration(milliseconds: 100), (_) {
                   cameraVelocity += 0.01;
+                  setState(() {});
                 }));
               },
               onTapCancel: () {
@@ -218,70 +270,130 @@ class _TossMasterState extends State<TossMaster> with WidgetsBindingObserver {
           // 前进后退
           Row(mainAxisAlignment: MainAxisAlignment.center, children: [
             GestureDetector(
-              onTapDown: (_) =>
-                  startMoveVector(cameraPos, cameraFront, cameraVelocity),
-              onTapCancel: stopMoveVector,
               child: ElevatedButton.icon(
                 icon: const Icon(Icons.zoom_out_map),
                 onPressed: () {},
                 label: const Text('前进'),
               ),
+              onTapDown: (_) {
+                _timers.addLast(
+                    Timer.periodic(const Duration(milliseconds: 100), (_) {
+                  var tmp = cameraFront;
+                  tmp.normalize();
+                  tmp.scale(cameraVelocity);
+                  cameraPos += tmp;
+                  setState(() {});
+                }));
+              },
+              onTapCancel: () {
+                if (_timers.isNotEmpty) _timers.removeFirst().cancel();
+              },
             ),
             GestureDetector(
-              onTapDown: (_) =>
-                  startMoveVector(cameraPos, cameraFront, -cameraVelocity),
-              onTapCancel: stopMoveVector,
               child: ElevatedButton.icon(
                 icon: const Icon(Icons.zoom_in_map),
                 onPressed: () {},
                 label: const Text('后退'),
               ),
+              onTapDown: (_) {
+                _timers.addLast(
+                    Timer.periodic(const Duration(milliseconds: 100), (_) {
+                  var tmp = cameraFront;
+                  tmp.normalize();
+                  tmp.scale(cameraVelocity);
+                  cameraPos -= tmp;
+                  setState(() {});
+                }));
+              },
+              onTapCancel: () {
+                if (_timers.isNotEmpty) _timers.removeFirst().cancel();
+              },
             ),
           ]),
           // 上下
           Row(mainAxisAlignment: MainAxisAlignment.center, children: [
             GestureDetector(
-              onTapDown: (_) =>
-                  startMoveVector(cameraPos, cameraUp, cameraVelocity),
-              onTapCancel: stopMoveVector,
               child: ElevatedButton.icon(
                 icon: const Icon(Icons.arrow_upward),
                 onPressed: () {},
                 label: const Text('上升'),
               ),
+              onTapDown: (_) {
+                _timers.addLast(
+                    Timer.periodic(const Duration(milliseconds: 100), (_) {
+                  var tmp = cameraUp;
+                  tmp.normalize();
+                  tmp.scale(cameraVelocity);
+                  cameraPos += tmp;
+                  setState(() {});
+                }));
+              },
+              onTapCancel: () {
+                if (_timers.isNotEmpty) _timers.removeFirst().cancel();
+              },
             ),
             GestureDetector(
-              onTapDown: (_) =>
-                  startMoveVector(cameraPos, cameraUp, -cameraVelocity),
-              onTapCancel: stopMoveVector,
               child: ElevatedButton.icon(
                 icon: const Icon(Icons.arrow_downward),
                 onPressed: () {},
                 label: const Text('下降'),
               ),
+              onTapDown: (_) {
+                _timers.addLast(
+                    Timer.periodic(const Duration(milliseconds: 100), (_) {
+                  var tmp = cameraUp;
+                  tmp.normalize();
+                  tmp.scale(cameraVelocity);
+                  cameraPos -= tmp;
+                  setState(() {});
+                }));
+              },
+              onTapCancel: () {
+                if (_timers.isNotEmpty) _timers.removeFirst().cancel();
+              },
             ),
           ]),
           // 左右
           Row(mainAxisAlignment: MainAxisAlignment.center, children: [
             GestureDetector(
-              onTapDown: (_) => startMoveVector(
-                  cameraPos, cameraFront.cross(cameraUp), -cameraVelocity),
-              onTapCancel: stopMoveVector,
               child: ElevatedButton.icon(
                 icon: const Icon(Icons.arrow_back),
                 onPressed: () {},
                 label: const Text('左移'),
               ),
+              onTapDown: (_) {
+                _timers.addLast(
+                    Timer.periodic(const Duration(milliseconds: 100), (_) {
+                  var carmeraRight = cameraFront.cross(cameraUp);
+                  carmeraRight.normalize();
+                  carmeraRight.scale(cameraVelocity);
+                  cameraPos += carmeraRight;
+                  setState(() {});
+                }));
+              },
+              onTapCancel: () {
+                if (_timers.isNotEmpty) _timers.removeFirst().cancel();
+              },
             ),
             GestureDetector(
-              onTapDown: (_) => startMoveVector(
-                  cameraPos, cameraFront.cross(cameraUp), cameraVelocity),
-              onTapCancel: stopMoveVector,
               child: ElevatedButton.icon(
                 icon: const Icon(Icons.arrow_forward),
                 onPressed: () {},
                 label: const Text('右移'),
               ),
+              onTapDown: (_) {
+                _timers.addLast(
+                    Timer.periodic(const Duration(milliseconds: 100), (_) {
+                  var carmeraRight = cameraFront.cross(cameraUp);
+                  carmeraRight.normalize();
+                  carmeraRight.scale(cameraVelocity);
+                  cameraPos -= carmeraRight;
+                  setState(() {});
+                }));
+              },
+              onTapCancel: () {
+                if (_timers.isNotEmpty) _timers.removeFirst().cancel();
+              },
             ),
           ]),
           // 水平旋转
@@ -298,6 +410,7 @@ class _TossMasterState extends State<TossMaster> with WidgetsBindingObserver {
                   var tmp = vm.Matrix4.identity();
                   tmp.rotate(cameraUp, vm.radians(5.0 * cameraVelocity));
                   cameraFront = tmp.transform3(cameraFront);
+                  setState(() {});
                 }));
               },
               onTapCancel: () {
@@ -316,6 +429,7 @@ class _TossMasterState extends State<TossMaster> with WidgetsBindingObserver {
                   var tmp = vm.Matrix4.identity();
                   tmp.rotate(cameraUp, vm.radians(-5.0 * cameraVelocity));
                   cameraFront = tmp.transform3(cameraFront);
+                  setState(() {});
                 }));
               },
               onTapCancel: () {
@@ -323,16 +437,33 @@ class _TossMasterState extends State<TossMaster> with WidgetsBindingObserver {
               },
             ),
           ]),
-        ]);
+        ])));
       // 场景编辑模式
       case Mode.editScene:
         return Column(children: <Widget>[
-          ElevatedButton.icon(
-            icon: const Icon(Icons.add),
-            onPressed: () {},
-            label: const Text('添加模型'),
-          ),
-          Container(
+          // 模型管理
+          Row(children: [
+            ElevatedButton.icon(
+              icon: const Icon(Icons.upload_file),
+              onPressed: () {
+                importModel(flutterGlPlugin.gl);
+              },
+              label: const Text('导入模型'),
+            ),
+            ElevatedButton.icon(
+              icon: const Icon(Icons.add),
+              onPressed: _selectedModelIndex != null
+                  ? () {
+                      models[_selectedModelIndex!].instantiate(
+                          flutterGlPlugin.gl,
+                          vm.Matrix4.translation(vm.Vector3(0, 0, 0)));
+                    }
+                  : null,
+              label: const Text('添加实例'),
+            )
+          ]),
+          // 模型展示与选择
+          SizedBox(
               height: 150.0,
               child: ListView.builder(
                 itemCount: models.length,
@@ -384,66 +515,6 @@ class _TossMasterState extends State<TossMaster> with WidgetsBindingObserver {
         );
     }
   }
-
-  // 用于选择模型的对话框
-  // Future<void> _modelsDialog() async {
-  //   return showDialog<void>(
-  //     context: context,
-  //     barrierDismissible: false, // user must tap button!
-  //     builder: (BuildContext context) {
-  //       return AlertDialog(
-  //         title: const Text('AlertDialog Title'),
-  //         content: const SingleChildScrollView(
-  //           child: ListBody(
-  //             children: <Widget>[
-  //               Text('等待替换为模型显示'),
-  //             ],
-  //           ),
-  //         ),
-  //         actions: <Widget>[
-  //           // 取消按钮
-  //           TextButton.icon(
-  //             icon: const Icon(Icons.cancel),
-  //             label: const Text('Cancel'),
-  //             onPressed: () {
-  //               Navigator.of(context).pop();
-  //             },
-  //           ),
-  //           // 添加模型按钮
-  //           TextButton.icon(
-  //             icon: const Icon(Icons.add),
-  //             label: const Text('Add'),
-  //             onPressed: () async {
-  //               FilePickerResult? result =
-  //                   await FilePicker.platform.pickFiles();
-  //               if (result == null) {
-  //                 return;
-  //               }
-  //               final file = result.files.single;
-  //               final path = file.path;
-  //               if (path == null) {
-  //                 return;
-  //               }
-  //               debugPrint("selected file: $path");
-  //               final model = ImportedModel(path);
-
-  //               models.add(model);
-  //               setState(() {});
-  //             },
-  //           ),
-  //           // 确定选中按钮
-  //           TextButton.icon(
-  //             icon: const Icon(Icons.check),
-  //             label: const Text('OK'),
-  //             onPressed: () {
-  //               Navigator.of(context).pop();
-  //             },
-  //           ),
-  //         ],
-  //       );
-  //     },
-  //   );
-  // }
 
   // ***********************
   // 相机
@@ -628,24 +699,24 @@ class _TossMasterState extends State<TossMaster> with WidgetsBindingObserver {
     final gl = flutterGlPlugin.gl;
     // 顶点
 
-    late String objPath, texPath;
-    FilePickerResult? result = await FilePicker.platform.pickFiles();
-    if (result != null) {
-      developer.log("selected file: ${result.files.single.path}");
-      objPath = result.files.single.path!;
-    }
+    // late String objPath, texPath;
+    // FilePickerResult? result = await FilePicker.platform.pickFiles();
+    // if (result != null) {
+    //   developer.log("selected file: ${result.files.single.path}");
+    //   objPath = result.files.single.path!;
+    // }
 
-    // 纹理
-    result = await FilePicker.platform.pickFiles();
-    if (result != null) {
-      developer.log("selected file: ${result.files.single.path}");
-      texPath = result.files.single.path!;
-    }
+    // // 纹理
+    // result = await FilePicker.platform.pickFiles();
+    // if (result != null) {
+    //   developer.log("selected file: ${result.files.single.path}");
+    //   texPath = result.files.single.path!;
+    // }
 
-    models.add(ImportedModel(gl, objPath, texPath));
-    models[0].instantiate(gl, vm.Matrix4.translation(vm.Vector3(0, 0, 0)));
-    models[0].instantiate(gl, vm.Matrix4.translation(vm.Vector3(2, 0, 0)));
-    models[0].instantiate(gl, vm.Matrix4.translation(vm.Vector3(0, 2, 0)));
+    // models.add(ImportedModel(gl, objPath, texPath));
+    // models[0].instantiate(gl, vm.Matrix4.translation(vm.Vector3(0, 0, 0)));
+    // models[0].instantiate(gl, vm.Matrix4.translation(vm.Vector3(2, 0, 0)));
+    // models[0].instantiate(gl, vm.Matrix4.translation(vm.Vector3(0, 2, 0)));
 
     // **********
     // 着色器
