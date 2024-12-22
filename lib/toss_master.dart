@@ -41,6 +41,22 @@ class Throttler {
   }
 }
 
+class TossMasterApp extends StatelessWidget {
+  const TossMasterApp({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      title: 'TossMaster - ZJU CG 2024',
+      theme: ThemeData(
+        colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
+        useMaterial3: true,
+      ),
+      home: const TossMaster(),
+    );
+  }
+}
+
 class TossMaster extends StatefulWidget {
   const TossMaster({super.key});
   @override
