@@ -9,7 +9,6 @@ import 'package:flutter/material.dart';
 
 import 'package:flutter_gl/flutter_gl.dart';
 import 'package:flutter_gl/native-array/NativeArray.app.dart';
-import 'package:path/path.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:image/image.dart' as imglib;
 import 'package:camera/camera.dart';
@@ -17,7 +16,6 @@ import 'package:vector_math/vector_math.dart' as vm;
 import 'package:file_picker/file_picker.dart';
 
 import 'opengl_utils.dart';
-import 'opengl_sphere.dart' as sphere;
 import 'opengl_model.dart';
 
 enum Mode { editScene, game, editLight, editCamera }
@@ -106,19 +104,19 @@ class _TossMasterState extends State<TossMaster> with WidgetsBindingObserver {
                 onPointerUp: (PointerUpEvent event) =>
                     setState(() => _pointerEvent = event),
               ),
-              Container(
-                  //child: testData != null
-                  //    ? Image.memory(imglib.encodePng(testData!),
-                  //        width: 100, height: 100)
-                  //    : const Placeholder()),
-                  child: _pointerEvent != null
-                      ? Column(children: [
-                          Text(
-                              "x: ${_pointerEvent!.localPosition.dx * dpr}, y: ${_pointerEvent!.localPosition.dy * dpr}"),
-                          Text(
-                              "selectedModelIndex: $_selectedModelIndex, selectedModelInstanceIndex: $_selectedModelInstanceIndex")
-                        ])
-                      : Container()),
+              // Container(
+              //     //child: testData != null
+              //     //    ? Image.memory(imglib.encodePng(testData!),
+              //     //        width: 100, height: 100)
+              //     //    : const Placeholder()),
+              //     child: _pointerEvent != null
+              //         ? Column(children: [
+              //             Text(
+              //                 "x: ${_pointerEvent!.localPosition.dx * dpr}, y: ${_pointerEvent!.localPosition.dy * dpr}"),
+              //             Text(
+              //                 "selectedModelIndex: $_selectedModelIndex, selectedModelInstanceIndex: $_selectedModelInstanceIndex")
+              //           ])
+              //         : Container()),
               // 模式控制面板
               _modeWidget,
               const Spacer(),
@@ -160,6 +158,16 @@ class _TossMasterState extends State<TossMaster> with WidgetsBindingObserver {
 
   final Queue<Timer> _timers = Queue<Timer>();
 
+  startMoveVector(vm.Vector3 v, vm.Vector3 dir, double vol) {
+    _timers.addLast(Timer.periodic(const Duration(milliseconds: 100), (_) {
+      v = moveVector(v, dir, vol);
+    }));
+  }
+
+  stopMoveVector() {
+    if (_timers.isNotEmpty) _timers.removeFirst().cancel();
+  }
+
   Widget get _modeWidget {
     switch (_mode) {
       // 相机编辑模式：串流、三轴位移和旋转
@@ -182,9 +190,8 @@ class _TossMasterState extends State<TossMaster> with WidgetsBindingObserver {
               onTapDown: (_) {
                 _timers.addLast(
                     Timer.periodic(const Duration(milliseconds: 100), (_) {
-                  developer.log('Timer');
                   cameraVelocity -= 0.01;
-                  setState(() {});
+                  if (cameraVelocity < 0.0) cameraVelocity = 0.0;
                 }));
               },
               onTapCancel: () {
@@ -200,9 +207,7 @@ class _TossMasterState extends State<TossMaster> with WidgetsBindingObserver {
               onTapDown: (_) {
                 _timers.addLast(
                     Timer.periodic(const Duration(milliseconds: 100), (_) {
-                  developer.log('Timer');
                   cameraVelocity += 0.01;
-                  setState(() {});
                 }));
               },
               onTapCancel: () {
@@ -213,130 +218,70 @@ class _TossMasterState extends State<TossMaster> with WidgetsBindingObserver {
           // 前进后退
           Row(mainAxisAlignment: MainAxisAlignment.center, children: [
             GestureDetector(
+              onTapDown: (_) =>
+                  startMoveVector(cameraPos, cameraFront, cameraVelocity),
+              onTapCancel: stopMoveVector,
               child: ElevatedButton.icon(
                 icon: const Icon(Icons.zoom_out_map),
                 onPressed: () {},
                 label: const Text('前进'),
               ),
-              onTapDown: (_) {
-                _timers.addLast(
-                    Timer.periodic(const Duration(milliseconds: 100), (_) {
-                  var tmp = cameraFront;
-                  tmp.normalize();
-                  tmp.scale(cameraVelocity);
-                  cameraPos += tmp;
-                  setState(() {});
-                }));
-              },
-              onTapCancel: () {
-                if (_timers.isNotEmpty) _timers.removeFirst().cancel();
-              },
             ),
             GestureDetector(
+              onTapDown: (_) =>
+                  startMoveVector(cameraPos, cameraFront, -cameraVelocity),
+              onTapCancel: stopMoveVector,
               child: ElevatedButton.icon(
                 icon: const Icon(Icons.zoom_in_map),
                 onPressed: () {},
                 label: const Text('后退'),
               ),
-              onTapDown: (_) {
-                _timers.addLast(
-                    Timer.periodic(const Duration(milliseconds: 100), (_) {
-                  var tmp = cameraFront;
-                  tmp.normalize();
-                  tmp.scale(cameraVelocity);
-                  cameraPos -= tmp;
-                  setState(() {});
-                }));
-              },
-              onTapCancel: () {
-                if (_timers.isNotEmpty) _timers.removeFirst().cancel();
-              },
             ),
           ]),
           // 上下
           Row(mainAxisAlignment: MainAxisAlignment.center, children: [
             GestureDetector(
+              onTapDown: (_) =>
+                  startMoveVector(cameraPos, cameraUp, cameraVelocity),
+              onTapCancel: stopMoveVector,
               child: ElevatedButton.icon(
                 icon: const Icon(Icons.arrow_upward),
                 onPressed: () {},
                 label: const Text('上升'),
               ),
-              onTapDown: (_) {
-                _timers.addLast(
-                    Timer.periodic(const Duration(milliseconds: 100), (_) {
-                  var tmp = cameraUp;
-                  tmp.normalize();
-                  tmp.scale(cameraVelocity);
-                  cameraPos += tmp;
-                  setState(() {});
-                }));
-              },
-              onTapCancel: () {
-                if (_timers.isNotEmpty) _timers.removeFirst().cancel();
-              },
             ),
             GestureDetector(
+              onTapDown: (_) =>
+                  startMoveVector(cameraPos, cameraUp, -cameraVelocity),
+              onTapCancel: stopMoveVector,
               child: ElevatedButton.icon(
                 icon: const Icon(Icons.arrow_downward),
                 onPressed: () {},
                 label: const Text('下降'),
               ),
-              onTapDown: (_) {
-                _timers.addLast(
-                    Timer.periodic(const Duration(milliseconds: 100), (_) {
-                  var tmp = cameraUp;
-                  tmp.normalize();
-                  tmp.scale(cameraVelocity);
-                  cameraPos -= tmp;
-                  setState(() {});
-                }));
-              },
-              onTapCancel: () {
-                if (_timers.isNotEmpty) _timers.removeFirst().cancel();
-              },
             ),
           ]),
           // 左右
           Row(mainAxisAlignment: MainAxisAlignment.center, children: [
             GestureDetector(
+              onTapDown: (_) => startMoveVector(
+                  cameraPos, cameraFront.cross(cameraUp), -cameraVelocity),
+              onTapCancel: stopMoveVector,
               child: ElevatedButton.icon(
                 icon: const Icon(Icons.arrow_back),
                 onPressed: () {},
                 label: const Text('左移'),
               ),
-              onTapDown: (_) {
-                _timers.addLast(
-                    Timer.periodic(const Duration(milliseconds: 100), (_) {
-                  var carmeraRight = cameraFront.cross(cameraUp);
-                  carmeraRight.normalize();
-                  carmeraRight.scale(cameraVelocity);
-                  cameraPos += carmeraRight;
-                  setState(() {});
-                }));
-              },
-              onTapCancel: () {
-                if (_timers.isNotEmpty) _timers.removeFirst().cancel();
-              },
             ),
             GestureDetector(
+              onTapDown: (_) => startMoveVector(
+                  cameraPos, cameraFront.cross(cameraUp), cameraVelocity),
+              onTapCancel: stopMoveVector,
               child: ElevatedButton.icon(
                 icon: const Icon(Icons.arrow_forward),
                 onPressed: () {},
                 label: const Text('右移'),
               ),
-              onTapDown: (_) {
-                _timers.addLast(
-                    Timer.periodic(const Duration(milliseconds: 100), (_) {
-                  var carmeraRight = cameraFront.cross(cameraUp);
-                  carmeraRight.normalize();
-                  carmeraRight.scale(cameraVelocity);
-                  cameraPos -= carmeraRight;
-                  setState(() {});
-                }));
-              },
-              onTapCancel: () {
-                if (_timers.isNotEmpty) _timers.removeFirst().cancel();
-              },
             ),
           ]),
           // 水平旋转
@@ -353,7 +298,6 @@ class _TossMasterState extends State<TossMaster> with WidgetsBindingObserver {
                   var tmp = vm.Matrix4.identity();
                   tmp.rotate(cameraUp, vm.radians(5.0 * cameraVelocity));
                   cameraFront = tmp.transform3(cameraFront);
-                  setState(() {});
                 }));
               },
               onTapCancel: () {
@@ -372,7 +316,6 @@ class _TossMasterState extends State<TossMaster> with WidgetsBindingObserver {
                   var tmp = vm.Matrix4.identity();
                   tmp.rotate(cameraUp, vm.radians(-5.0 * cameraVelocity));
                   cameraFront = tmp.transform3(cameraFront);
-                  setState(() {});
                 }));
               },
               onTapCancel: () {
@@ -389,6 +332,40 @@ class _TossMasterState extends State<TossMaster> with WidgetsBindingObserver {
             onPressed: () {},
             label: const Text('添加模型'),
           ),
+          Container(
+              height: 150.0,
+              child: ListView.builder(
+                itemCount: models.length,
+                scrollDirection: Axis.horizontal,
+                itemBuilder: (context, index) {
+                  return GestureDetector(
+                    onTap: () {
+                      setState(() {
+                        _selectedModelIndex = index;
+                      });
+                    },
+                    child: Card(
+                      elevation: 4.0,
+                      shape: const RoundedRectangleBorder(
+                        borderRadius: BorderRadius.all(
+                          Radius.circular(10),
+                        ),
+                      ),
+                      child: Container(
+                        color: _selectedModelIndex == index
+                            ? Colors.red
+                            : Colors.transparent,
+                        padding: _selectedModelIndex == index
+                            ? const EdgeInsets.all(8.0)
+                            : null,
+                        child: models[index].gifPath == null
+                            ? Image.file(File(models[index].texPath))
+                            : Image.file(File(models[index].gifPath!)),
+                      ),
+                    ),
+                  );
+                },
+              ))
         ]);
       // 光照编辑模式
       case Mode.editLight:
@@ -407,6 +384,66 @@ class _TossMasterState extends State<TossMaster> with WidgetsBindingObserver {
         );
     }
   }
+
+  // 用于选择模型的对话框
+  // Future<void> _modelsDialog() async {
+  //   return showDialog<void>(
+  //     context: context,
+  //     barrierDismissible: false, // user must tap button!
+  //     builder: (BuildContext context) {
+  //       return AlertDialog(
+  //         title: const Text('AlertDialog Title'),
+  //         content: const SingleChildScrollView(
+  //           child: ListBody(
+  //             children: <Widget>[
+  //               Text('等待替换为模型显示'),
+  //             ],
+  //           ),
+  //         ),
+  //         actions: <Widget>[
+  //           // 取消按钮
+  //           TextButton.icon(
+  //             icon: const Icon(Icons.cancel),
+  //             label: const Text('Cancel'),
+  //             onPressed: () {
+  //               Navigator.of(context).pop();
+  //             },
+  //           ),
+  //           // 添加模型按钮
+  //           TextButton.icon(
+  //             icon: const Icon(Icons.add),
+  //             label: const Text('Add'),
+  //             onPressed: () async {
+  //               FilePickerResult? result =
+  //                   await FilePicker.platform.pickFiles();
+  //               if (result == null) {
+  //                 return;
+  //               }
+  //               final file = result.files.single;
+  //               final path = file.path;
+  //               if (path == null) {
+  //                 return;
+  //               }
+  //               debugPrint("selected file: $path");
+  //               final model = ImportedModel(path);
+
+  //               models.add(model);
+  //               setState(() {});
+  //             },
+  //           ),
+  //           // 确定选中按钮
+  //           TextButton.icon(
+  //             icon: const Icon(Icons.check),
+  //             label: const Text('OK'),
+  //             onPressed: () {
+  //               Navigator.of(context).pop();
+  //             },
+  //           ),
+  //         ],
+  //       );
+  //     },
+  //   );
+  // }
 
   // ***********************
   // 相机
@@ -609,7 +646,6 @@ class _TossMasterState extends State<TossMaster> with WidgetsBindingObserver {
     models[0].instantiate(gl, vm.Matrix4.translation(vm.Vector3(0, 0, 0)));
     models[0].instantiate(gl, vm.Matrix4.translation(vm.Vector3(2, 0, 0)));
     models[0].instantiate(gl, vm.Matrix4.translation(vm.Vector3(0, 2, 0)));
-
 
     // **********
     // 着色器
@@ -951,66 +987,6 @@ void main(void)
           }
         }));
   }
-
-  // 用于选择模型的对话框
-  // Future<void> _modelsDialog() async {
-  //   return showDialog<void>(
-  //     context: context,
-  //     barrierDismissible: false, // user must tap button!
-  //     builder: (BuildContext context) {
-  //       return AlertDialog(
-  //         title: const Text('AlertDialog Title'),
-  //         content: const SingleChildScrollView(
-  //           child: ListBody(
-  //             children: <Widget>[
-  //               Text('等待替换为模型显示'),
-  //             ],
-  //           ),
-  //         ),
-  //         actions: <Widget>[
-  //           // 取消按钮
-  //           TextButton.icon(
-  //             icon: const Icon(Icons.cancel),
-  //             label: const Text('Cancel'),
-  //             onPressed: () {
-  //               Navigator.of(context).pop();
-  //             },
-  //           ),
-  //           // 添加模型按钮
-  //           TextButton.icon(
-  //             icon: const Icon(Icons.add),
-  //             label: const Text('Add'),
-  //             onPressed: () async {
-  //               FilePickerResult? result =
-  //                   await FilePicker.platform.pickFiles();
-  //               if (result == null) {
-  //                 return;
-  //               }
-  //               final file = result.files.single;
-  //               final path = file.path;
-  //               if (path == null) {
-  //                 return;
-  //               }
-  //               debugPrint("selected file: $path");
-  //               final model = ImportedModel(path);
-
-  //               models.add(model);
-  //               setState(() {});
-  //             },
-  //           ),
-  //           // 确定选中按钮
-  //           TextButton.icon(
-  //             icon: const Icon(Icons.check),
-  //             label: const Text('OK'),
-  //             onPressed: () {
-  //               Navigator.of(context).pop();
-  //             },
-  //           ),
-  //         ],
-  //       );
-  //     },
-  //   );
-  // }
 
   // 创建 FBO 用于离屏渲染
   setupDefaultFBO() {

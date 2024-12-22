@@ -12,13 +12,15 @@ class ImportedModel {
   final int vao;
   final List<dynamic> vbo;
   final int texture;
+  final String texPath;
+  String? gifPath;
   // 实例数据
   // final List<Vector3> instancePosition = [];
   final List<Vector3> instanceVelocity = [];
   final List<Matrix4> instanceMatrix = [];
   final List<int> instanceFlag = [];
 
-  factory ImportedModel(gl, String objPath, String texPath) {
+  factory ImportedModel(gl, String objPath, String texPath, {String? gifPath}) {
     // 顶点数据：解析 OBJ 文件
     final List<double> vertVals = [];
     final List<double> triangleVerts = [];
@@ -141,11 +143,11 @@ class ImportedModel {
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
 
     return ImportedModel._internal(
-        numVertices, vao, vbo, texture, triangleVerts);
+        numVertices, vao, vbo, texture, triangleVerts, texPath, gifPath);
   }
 
-  ImportedModel._internal(
-      this.numVertices, this.vao, this.vbo, this.texture, this.vertices);
+  ImportedModel._internal(this.numVertices, this.vao, this.vbo, this.texture,
+      this.vertices, this.texPath, this.gifPath);
 
   void instantiate(gl, Matrix4 modelMatrix) {
     instanceMatrix.add(modelMatrix);

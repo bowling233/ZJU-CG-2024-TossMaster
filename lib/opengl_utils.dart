@@ -15,6 +15,10 @@ Vector2 screenToNDC(Vector2 screenCoords, Vector2 screenSize) {
   );
 }
 
+Vector3 moveVector(Vector3 v, Vector3 dir, double vol) {
+  return Vector3(v.x + dir.x * vol, v.y + dir.y * vol, v.z + dir.z * vol);
+}
+
 // *********************************
 // OpenGL 纹理
 // *********************************
