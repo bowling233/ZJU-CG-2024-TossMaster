@@ -1,25 +1,19 @@
 import 'dart:io';
-import 'dart:developer' as developer;
+import 'dart:typed_data';
+import 'package:flutter_gl/native-array/NativeArray.app.dart';
 import 'package:vector_math/vector_math.dart';
 import 'package:image/image.dart';
 
 class ImportedModel {
   final int numVertices;
-  final List<Vector3> vertices;
-  final List<Vector2> texCoords;
-  final List<Vector3> normalVecs;
-  // 模型的纹理
-  late Image texture;
-  // 加入场景的模型实例
-  late List<Matrix4> modelMatrix;
-  // OpenGL 相关
-  late int vao;
-  late List<dynamic> vbo;
+  final List<Matrix4> modelMatrix = [];
+  final int vao;
+  final List<dynamic> vbo;
+  final int texture;
 
-  // Factory constructor to create an ImportedModel from a file path
-  factory ImportedModel(String filePath) {
+  factory ImportedModel(gl, String objPath, String texPath) {
     final modelImporter = ModelImporter();
-    modelImporter.parseOBJ(filePath);
+    modelImporter.parseOBJ(objPath);
 
     final numVertices = modelImporter.getNumVertices();
     final verts = modelImporter.getVertices();
@@ -33,17 +27,57 @@ class ImportedModel {
     final normalVecs = List.generate(numVertices,
         (i) => Vector3(normals[i * 3], normals[i * 3 + 1], normals[i * 3 + 2]));
 
-    return ImportedModel._internal(
-        numVertices, vertices, texCoords, normalVecs);
+    List<double> pvalues = [];
+    List<double> tvalues = [];
+    List<double> nvalues = [];
+
+    for (var i = 0; i < numVertices; i++) {
+      pvalues.add(vertices[i].x);
+      pvalues.add(vertices[i].y);
+      pvalues.add(vertices[i].z);
+      tvalues.add(texCoords[i].x);
+      tvalues.add(texCoords[i].y);
+      nvalues.add(normalVecs[i].x);
+      nvalues.add(normalVecs[i].y);
+      nvalues.add(normalVecs[i].z);
+    }
+
+    final vao = gl.createVertexArray();
+    gl.bindVertexArray(vao);
+
+    final vbo = List.generate(3, (i) => gl.createBuffer());
+    gl.bindBuffer(gl.ARRAY_BUFFER, vbo[0]);
+    gl.bufferData(gl.ARRAY_BUFFER, pvalues.length * Float32List.bytesPerElement,
+        Float32List.fromList(pvalues), gl.STATIC_DRAW);
+    gl.vertexAttribPointer(0, 3, gl.FLOAT, false, 0, 0);
+    gl.enableVertexAttribArray(0);
+    gl.bindBuffer(gl.ARRAY_BUFFER, vbo[1]);
+    gl.bufferData(gl.ARRAY_BUFFER, tvalues.length * Float32List.bytesPerElement,
+        Float32List.fromList(tvalues), gl.STATIC_DRAW);
+    gl.vertexAttribPointer(1, 2, gl.FLOAT, false, 0, 0);
+    gl.enableVertexAttribArray(1);
+    gl.bindBuffer(gl.ARRAY_BUFFER, vbo[2]);
+    gl.bufferData(gl.ARRAY_BUFFER, nvalues.length * Float32List.bytesPerElement,
+        Float32List.fromList(nvalues), gl.STATIC_DRAW);
+    gl.vertexAttribPointer(2, 3, gl.FLOAT, false, 0, 0);
+    gl.enableVertexAttribArray(2);
+
+    var img =
+        decodeImage(File(texPath).readAsBytesSync())!.convert(numChannels: 4);
+    var textureData = NativeUint8Array.from(img.toUint8List());
+    var texture = gl.createTexture();
+    gl.bindTexture(gl.TEXTURE_2D, texture);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, img.width, img.height, 0, gl.RGBA,
+        gl.UNSIGNED_BYTE, textureData);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+
+    return ImportedModel._internal(numVertices, vao, vbo, texture);
   }
 
-  ImportedModel._internal(
-      this.numVertices, this.vertices, this.texCoords, this.normalVecs);
-
-  int getNumVertices() => numVertices;
-  List<Vector3> getVertices() => vertices;
-  List<Vector2> getTextureCoords() => texCoords;
-  List<Vector3> getNormals() => normalVecs;
+  ImportedModel._internal(this.numVertices, this.vao, this.vbo, this.texture);
 }
 
 class ModelImporter {
@@ -59,8 +93,6 @@ class ModelImporter {
     final lines = file.readAsLinesSync();
 
     for (var line in lines) {
-      // debug: log file content
-      developer.log(line);
       if (line.startsWith('v ')) {
         final parts = line.substring(2).trim().split(RegExp(r'\s+'));
         vertVals.addAll(parts.map(double.parse));
@@ -96,17 +128,7 @@ class ModelImporter {
           ]);
         }
       }
-      else{
-        developer.log("Unknown line type: $line");
-      }
     }
-    // print all length
-    developer.log("vertVals length: ${vertVals.length}");
-    developer.log("triangleVerts length: ${triangleVerts.length}");
-    developer.log("textureCoords length: ${textureCoords.length}");
-    developer.log("stVals length: ${stVals.length}");
-    developer.log("normals length: ${normals.length}");
-    developer.log("normVals length: ${normVals.length}");
   }
 
   int getNumVertices() => (triangleVerts.length ~/ 3);

@@ -208,12 +208,9 @@ class _TossMasterState extends State<TossMaster> with WidgetsBindingObserver {
   late int bgProgram; // 背景着色器
   dynamic bgTexture;
   // 场景用
-  late int sceneVao;
-  List<dynamic> sceneVbo = [];
   late int sceneProgram;
   late vm.Vector3 cameraPos, cameraFront, cameraUp;
   late vm.Matrix4 pMat;
-  dynamic sceneTexture;
   //sphere.Sphere mySphere = sphere.Sphere();
 
   int t = DateTime.now().millisecondsSinceEpoch;
@@ -288,9 +285,11 @@ class _TossMasterState extends State<TossMaster> with WidgetsBindingObserver {
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
   }
 
+  // 背景纹理渲染
   renderBackground() {
     final gl = flutterGlPlugin.gl;
     gl.useProgram(bgProgram);
+    // 禁用深度测试
     gl.disable(gl.DEPTH_TEST);
     // 绑定纹理
     gl.bindTexture(gl.TEXTURE_2D, bgTexture);
@@ -305,96 +304,26 @@ class _TossMasterState extends State<TossMaster> with WidgetsBindingObserver {
     gl.drawArrays(gl.TRIANGLE_FAN, 0, 4);
   }
 
-  // 场景
+  // 场景数据准备
   prepareScene() async {
     final gl = flutterGlPlugin.gl;
-    // **********
     // 顶点
-    // **********
-    // List<int> ind = mySphere.getIndices();
-    // List<vm.Vector3> vert = mySphere.getVertices();
-    // List<vm.Vector2> tex = mySphere.getTexCoords();
-    // List<vm.Vector3> norm = mySphere.getNormals();
+
+    late String objPath, texPath;
     FilePickerResult? result = await FilePicker.platform.pickFiles();
     if (result != null) {
       developer.log("selected file: ${result.files.single.path}");
-      models.add(ImportedModel(result.files.single.path!));
-      currentModelIndex = models.length - 1;
-    }
-    List<vm.Vector3> vert = models[currentModelIndex].getVertices();
-    List<vm.Vector2> tex = models[currentModelIndex].getTextureCoords();
-    List<vm.Vector3> norm = models[currentModelIndex].getNormals();
-
-    List<double> pvalues = [];
-    List<double> tvalues = [];
-    List<double> nvalues = [];
-
-    // int numIndices = mySphere.getNumIndices();
-    // for (int i = 0; i < numIndices; i++) {
-    //   pvalues.add(vert[ind[i]].x);
-    //   pvalues.add(vert[ind[i]].y);
-    //   pvalues.add(vert[ind[i]].z);
-    //   tvalues.add(tex[ind[i]].x);
-    //   tvalues.add(tex[ind[i]].y);
-    //   nvalues.add(norm[ind[i]].x);
-    //   nvalues.add(norm[ind[i]].y);
-    //   nvalues.add(norm[ind[i]].z);
-    // }
-    for (int i = 0; i < models[currentModelIndex].getNumVertices(); i++) {
-      pvalues.add(vert[i].x);
-      pvalues.add(vert[i].y);
-      pvalues.add(vert[i].z);
-      tvalues.add(tex[i].x);
-      tvalues.add(tex[i].y);
-      nvalues.add(norm[i].x);
-      nvalues.add(norm[i].y);
-      nvalues.add(norm[i].z);
+      objPath = result.files.single.path!;
     }
 
-    sceneVao = gl.createVertexArray();
-    gl.bindVertexArray(sceneVao);
-
-    sceneVbo.add(gl.createBuffer());
-    gl.bindBuffer(gl.ARRAY_BUFFER, sceneVbo[0]);
-    gl.bufferData(gl.ARRAY_BUFFER, pvalues.length * Float32List.bytesPerElement,
-        Float32List.fromList(pvalues), gl.STATIC_DRAW);
-
-    sceneVbo.add(gl.createBuffer());
-    gl.bindBuffer(gl.ARRAY_BUFFER, sceneVbo[1]);
-    gl.bufferData(gl.ARRAY_BUFFER, tvalues.length * Float32List.bytesPerElement,
-        Float32List.fromList(tvalues), gl.STATIC_DRAW);
-
-    sceneVbo.add(gl.createBuffer());
-    gl.bindBuffer(gl.ARRAY_BUFFER, sceneVbo[2]);
-    gl.bufferData(gl.ARRAY_BUFFER, nvalues.length * Float32List.bytesPerElement,
-        Float32List.fromList(nvalues), gl.STATIC_DRAW);
-
-    // **********
     // 纹理
-    // **********
-    late imglib.Image texture;
     result = await FilePicker.platform.pickFiles();
     if (result != null) {
       developer.log("selected file: ${result.files.single.path}");
-      texture = imglib
-          .decodeImage(File(result.files.single.path!).readAsBytesSync())!
-          .convert(numChannels: 4);
+      texPath = result.files.single.path!;
     }
-    var textureData = NativeUint8Array.from(texture.toUint8List());
-    if (textureData.length != texture.width * texture.height * 4) {
-      developer.log("textureData length error");
-      developer
-          .log("texture: ${texture.width}x${texture.height} ${texture.format}");
-      developer.log("textureData: ${textureData.length}");
-    }
-    sceneTexture = gl.createTexture();
-    gl.bindTexture(gl.TEXTURE_2D, sceneTexture);
-    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, texture.width, texture.height, 0,
-        gl.RGBA, gl.UNSIGNED_BYTE, textureData);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+
+    models.add(ImportedModel(gl, objPath, texPath));
 
     // **********
     // 着色器
@@ -546,22 +475,24 @@ void main(void)
     var mMat = vm.Matrix4.translation(vm.Vector3(0.0, 0.0, 0.0));
     var mvMat = vMat * mMat;
     gl.uniformMatrix4fv(mvLoc, false, mvMat.storage);
-    // 顶点
-    gl.bindVertexArray(sceneVao);
-    gl.bindBuffer(gl.ARRAY_BUFFER, sceneVbo[0]);
-    gl.vertexAttribPointer(0, 3, gl.FLOAT, false, 0, 0);
-    gl.enableVertexAttribArray(0);
-    gl.bindBuffer(gl.ARRAY_BUFFER, sceneVbo[1]);
-    gl.vertexAttribPointer(1, 2, gl.FLOAT, false, 0, 0);
-    gl.enableVertexAttribArray(1);
-    gl.bindBuffer(gl.ARRAY_BUFFER, sceneVbo[2]);
-    gl.vertexAttribPointer(2, 3, gl.FLOAT, false, 0, 0);
-    gl.enableVertexAttribArray(2);
-    // 纹理
-    gl.activeTexture(gl.TEXTURE0);
-    gl.bindTexture(gl.TEXTURE_2D, sceneTexture);
-    // 绘制
-    gl.drawArrays(gl.TRIANGLES, 0, models[currentModelIndex].getNumVertices());
+    for(final model in models) {
+      // 顶点
+      gl.bindVertexArray(model.vao);
+      gl.bindBuffer(gl.ARRAY_BUFFER, model.vbo[0]);
+      gl.vertexAttribPointer(0, 3, gl.FLOAT, false, 0, 0);
+      gl.enableVertexAttribArray(0);
+      gl.bindBuffer(gl.ARRAY_BUFFER, model.vbo[1]);
+      gl.vertexAttribPointer(1, 2, gl.FLOAT, false, 0, 0);
+      gl.enableVertexAttribArray(1);
+      gl.bindBuffer(gl.ARRAY_BUFFER, model.vbo[2]);
+      gl.vertexAttribPointer(2, 3, gl.FLOAT, false, 0, 0);
+      gl.enableVertexAttribArray(2);
+      // 纹理
+      gl.activeTexture(gl.TEXTURE0);
+      gl.bindTexture(gl.TEXTURE_2D, model.texture);
+      // 绘制
+      gl.drawArrays(gl.TRIANGLES, 0, model.numVertices);
+    }
   }
 
   render() {
@@ -840,8 +771,8 @@ void main(void)
     // 缓冲对象附件
     var defaultFboRbo = gl.createRenderbuffer();
     gl.bindRenderbuffer(gl.RENDERBUFFER, defaultFboRbo);
-    gl.renderbufferStorage(gl.RENDERBUFFER, gl.DEPTH24_STENCIL8, glWidth,
-        glHeight);
+    gl.renderbufferStorage(
+        gl.RENDERBUFFER, gl.DEPTH24_STENCIL8, glWidth, glHeight);
     gl.framebufferRenderbuffer(gl.FRAMEBUFFER, gl.DEPTH_STENCIL_ATTACHMENT,
         gl.RENDERBUFFER, defaultFboRbo);
   }
