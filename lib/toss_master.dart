@@ -107,8 +107,10 @@ class _TossMasterState extends State<TossMaster> with WidgetsBindingObserver {
                   tMin = double.infinity;
                   ({int index, double t}) testResult =
                       (index: -1, t: double.infinity);
+                  developer.log("${models.length}");
                   for (var i = 0; i < models.length; i++) {
-                    var myResult = models[i].hisTest(
+                    developer.log("i: $i");
+                    var myResult = models[i].hitTest(
                         screenToNDC(
                             vm.Vector2(
                                 event.localPosition.dx, event.localPosition.dy),
@@ -116,11 +118,19 @@ class _TossMasterState extends State<TossMaster> with WidgetsBindingObserver {
                         cameraPos,
                         vMat,
                         pMat);
+                    developer.log(
+                        "myResult: $myResult, tMin: $tMin, testResult: $testResult");
                     if (myResult.t < testResult.t) {
                       testResult = myResult;
                       _selectedModelIndex = i;
                       _selectedModelInstanceIndex = testResult.index;
                     }
+                  }
+                  // 选中模型
+                  if (_selectedModelIndex != null &&
+                      _selectedModelInstanceIndex != null) {
+                    models[_selectedModelIndex!]
+                        .select(_selectedModelInstanceIndex!);
                   }
                 }),
                 // 拖动：移动物体
@@ -384,7 +394,7 @@ class _TossMasterState extends State<TossMaster> with WidgetsBindingObserver {
                   var carmeraRight = cameraFront.cross(cameraUp);
                   carmeraRight.normalize();
                   carmeraRight.scale(cameraVelocity);
-                  cameraPos += carmeraRight;
+                  cameraPos -= carmeraRight;
                   setState(() {});
                 }));
               },
@@ -404,7 +414,7 @@ class _TossMasterState extends State<TossMaster> with WidgetsBindingObserver {
                   var carmeraRight = cameraFront.cross(cameraUp);
                   carmeraRight.normalize();
                   carmeraRight.scale(cameraVelocity);
-                  cameraPos -= carmeraRight;
+                  cameraPos += carmeraRight;
                   setState(() {});
                 }));
               },

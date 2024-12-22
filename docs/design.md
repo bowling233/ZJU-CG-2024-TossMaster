@@ -14,6 +14,7 @@
 
 项目分工：
 ·
+
 - 杨琳玥：负责碰撞检测，主循环设计。
 - 朱宝林：负责将代码迁移到 Flutter 框架，处理用户交互和 AR。
 
@@ -27,7 +28,6 @@
 
 首先要考虑的就是帧缓冲区。在 PC 上，GLFW 帮助我们完成了窗口和帧缓冲区的创建。但是在移动端，我们需要自行创建，`flutter_gl` 仅仅提供将离线渲染好的纹理绘制到屏幕上的功能。
 
-
 ### 模型
 
 项目具备基本的体素建模表达能力，能够导入 OBJ 格式的三维模型。
@@ -38,6 +38,39 @@
 - 模型的实例数据：模型矩阵（ModelMatrix），对应场景中的每个模型实例。
 
 渲染时，遍历模型库，绘制每个模型的不同实例。通过实例化渲染，可以减少重复绘制相同模型的开销。
+
+```dart
+for (final model in models) {
+    model.render(gl);
+}
+
+void render(gl) {
+    // 模型数据
+    gl.bindVertexArray(vao);
+    gl.bindBuffer(gl.ARRAY_BUFFER, vbo[0]);
+    gl.bindBuffer(gl.ARRAY_BUFFER, vbo[1]);
+    gl.bindBuffer(gl.ARRAY_BUFFER, vbo[2]);
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_2D, texture);
+    // 实例数据
+    if (instanceMatrix.isEmpty) return;
+    List<double> mMatrix = [];
+    for (var i = 0; i < instanceMatrix.length; i++) {
+        mMatrix.addAll(instanceMatrix[i].storage);
+    }
+    gl.bindBuffer(gl.ARRAY_BUFFER, vbo[3]);
+    gl.bufferData(gl.ARRAY_BUFFER, mMatrix.length * Float32List.bytesPerElement,
+        Float32List.fromList(mMatrix), gl.STATIC_DRAW);
+    gl.bindBuffer(gl.ARRAY_BUFFER, vbo[4]);
+    gl.bufferData(
+        gl.ARRAY_BUFFER,
+        instanceFlag.length * Int32List.bytesPerElement,
+        Int32List.fromList(instanceFlag),
+        gl.STATIC_DRAW);
+    // 实例化绘制
+    gl.drawArraysInstanced(gl.TRIANGLES, 0, numVertices, instanceMatrix.length);
+}
+```
 
 ### 材质与纹理
 
@@ -79,4 +112,3 @@
     - [theamorn/flutter-stream-image](https://github.com/theamorn/flutter-stream-image)：
     - [[Flutter] 用相機畫面一小部分做辨識。這篇文章源自於我在工作上第一次選用 Flutter… | by Claire Liu | Flutter Taipei | Medium](https://medium.com/flutter-taipei/flutter-%E5%B0%87%E7%9B%B8%E6%A9%9F%E7%95%AB%E9%9D%A2%E4%B8%80%E5%B0%8F%E9%83%A8%E5%88%86%E5%81%9A%E8%BE%A8%E8%AD%98-8247e9372c52)
     - [image_converter.dart](https://gist.github.com/Alby-o/fe87e35bc21d534c8220aed7df028e03)
-

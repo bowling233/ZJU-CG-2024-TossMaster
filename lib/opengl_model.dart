@@ -161,7 +161,9 @@ class ImportedModel {
     gl.bindBuffer(gl.ARRAY_BUFFER, vbo[0]);
     gl.bindBuffer(gl.ARRAY_BUFFER, vbo[1]);
     gl.bindBuffer(gl.ARRAY_BUFFER, vbo[2]);
-    // 模型实例矩阵
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_2D, texture);
+    // 实例数据
     if (instanceMatrix.isEmpty) return;
     List<double> mMatrix = [];
     for (var i = 0; i < instanceMatrix.length; i++) {
@@ -170,21 +172,17 @@ class ImportedModel {
     gl.bindBuffer(gl.ARRAY_BUFFER, vbo[3]);
     gl.bufferData(gl.ARRAY_BUFFER, mMatrix.length * Float32List.bytesPerElement,
         Float32List.fromList(mMatrix), gl.STATIC_DRAW);
-    // 实例标志
     gl.bindBuffer(gl.ARRAY_BUFFER, vbo[4]);
     gl.bufferData(
         gl.ARRAY_BUFFER,
         instanceFlag.length * Int32List.bytesPerElement,
         Int32List.fromList(instanceFlag),
         gl.STATIC_DRAW);
-    // 纹理
-    gl.activeTexture(gl.TEXTURE0);
-    gl.bindTexture(gl.TEXTURE_2D, texture);
     // 实例化绘制
     gl.drawArraysInstanced(gl.TRIANGLES, 0, numVertices, instanceMatrix.length);
-    // log('[ImportedModel.render()] drawArraysInstanced: ${modelMatrix.length}');
   }
 
+  // 实例选择
   void select(int index) {
     log('[ImportedModel.select()] index: $index');
     instanceFlag[index] = 1;
@@ -194,10 +192,12 @@ class ImportedModel {
     instanceFlag.fillRange(0, instanceFlag.length, 0);
   }
 
-  // 给定 pMat，标准设备坐标，返回选中的模型
-  ({int index, double t}) hisTest(
+  // 模型选中测试
+  ({int index, double t}) hitTest(
       Vector2 ndc, Vector3 cameraPos, Matrix4 vMat, Matrix4 pMat) {
     unSelect();
+    pMat = Matrix4.copy(pMat);
+    vMat = Matrix4.copy(vMat);
     // 反投影到裁剪空间
     var clipSpacePoint = Vector4(ndc.x, ndc.y, -1, 1);
     // 转换到视图空间
@@ -248,7 +248,6 @@ class ImportedModel {
         }
       }
     }
-    if (selectedIdx != -1) select(selectedIdx);
     return (index: selectedIdx, t: tMin);
   }
 
