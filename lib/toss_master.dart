@@ -57,6 +57,7 @@ class _TossMasterState extends State<TossMaster> with WidgetsBindingObserver {
   //   - 模式切换
   // ***********************
   Mode _mode = Mode.editScene;
+  // imglib.Image? testData;
 
   @override
   Widget build(BuildContext context) {
@@ -71,6 +72,11 @@ class _TossMasterState extends State<TossMaster> with WidgetsBindingObserver {
             children: <Widget>[
               // OpenGL 场景
               SingleChildScrollView(child: _build(context)),
+              // Container(
+              //     child: testData != null
+              //         ? Image.memory(imglib.encodePng(testData!),
+              //             width: 100, height: 100)
+              //         : const Placeholder()),
               // 模式控制面板
               _modeWidget,
               const Spacer(),
@@ -324,6 +330,9 @@ class _TossMasterState extends State<TossMaster> with WidgetsBindingObserver {
     }
 
     models.add(ImportedModel(gl, objPath, texPath));
+    models[0].instantiate(gl, vm.Matrix4.translation(vm.Vector3(0, 0, 0)));
+    models[0].instantiate(gl, vm.Matrix4.translation(vm.Vector3(0, 0, 3)));
+    // models[0].instantiate(gl, vm.Matrix4.translation(vm.Vector3(0, 3, 0)));
 
     // **********
     // 着色器
@@ -339,6 +348,7 @@ class _TossMasterState extends State<TossMaster> with WidgetsBindingObserver {
 layout (location = 0) in vec3 vertPos;
 layout (location = 1) in vec2 tex_coord;
 layout (location = 2) in vec3 vertNormal;
+layout (location = 3) in mat4 m_matrix;
 out vec3 varyingNormal;
 out vec3 varyingLightDir;
 out vec3 varyingVertPos;
@@ -361,13 +371,13 @@ struct Material
 uniform vec4 globalAmbient;
 uniform PositionalLight light;
 uniform Material material;
-uniform mat4 mv_matrix;
+uniform mat4 v_matrix;
 uniform mat4 proj_matrix;
 uniform mat4 norm_matrix;
 layout (binding=0) uniform sampler2D s;
 
 void main(void)
-{	varyingVertPos = (mv_matrix * vec4(vertPos,1.0)).xyz;
+{	varyingVertPos = (v_matrix * m_matrix * vec4(vertPos,1.0)).xyz;
 	varyingLightDir = light.position - varyingVertPos;
 	varyingNormal = (norm_matrix * vec4(vertNormal,1.0)).xyz;
 
@@ -375,7 +385,7 @@ void main(void)
 		normalize(normalize(varyingLightDir)
 		+ normalize(-varyingVertPos)).xyz;
 
-	gl_Position = proj_matrix * mv_matrix * vec4(vertPos,1.0);
+	gl_Position = proj_matrix * v_matrix * m_matrix * vec4(vertPos,1.0);
 	tc = tex_coord;
 }
 
@@ -408,7 +418,7 @@ struct Material
 uniform vec4 globalAmbient;
 uniform PositionalLight light;
 uniform Material material;
-uniform mat4 mv_matrix;
+uniform mat4 v_matrix;
 uniform mat4 proj_matrix;
 uniform mat4 norm_matrix;
 layout (binding=0) uniform sampler2D s;
@@ -460,7 +470,7 @@ void main(void)
     gl.frontFace(gl.CCW);
 
     // 矩阵统一变量
-    var mvLoc = gl.getUniformLocation(sceneProgram, "mv_matrix");
+    var vLoc = gl.getUniformLocation(sceneProgram, "v_matrix");
     var projLoc = gl.getUniformLocation(sceneProgram, "proj_matrix");
     var normLoc = gl.getUniformLocation(sceneProgram, "norm_matrix");
 
@@ -470,28 +480,10 @@ void main(void)
     gl.uniformMatrix4fv(projLoc, false, pMat.storage);
     // 视图矩阵
     var vMat = vm.makeViewMatrix(cameraPos, cameraPos + cameraFront, cameraUp);
+    gl.uniformMatrix4fv(vLoc, false, vMat.storage);
 
-    // 模型矩阵
-    var mMat = vm.Matrix4.translation(vm.Vector3(0.0, 0.0, 0.0));
-    var mvMat = vMat * mMat;
-    gl.uniformMatrix4fv(mvLoc, false, mvMat.storage);
-    for(final model in models) {
-      // 顶点
-      gl.bindVertexArray(model.vao);
-      gl.bindBuffer(gl.ARRAY_BUFFER, model.vbo[0]);
-      gl.vertexAttribPointer(0, 3, gl.FLOAT, false, 0, 0);
-      gl.enableVertexAttribArray(0);
-      gl.bindBuffer(gl.ARRAY_BUFFER, model.vbo[1]);
-      gl.vertexAttribPointer(1, 2, gl.FLOAT, false, 0, 0);
-      gl.enableVertexAttribArray(1);
-      gl.bindBuffer(gl.ARRAY_BUFFER, model.vbo[2]);
-      gl.vertexAttribPointer(2, 3, gl.FLOAT, false, 0, 0);
-      gl.enableVertexAttribArray(2);
-      // 纹理
-      gl.activeTexture(gl.TEXTURE0);
-      gl.bindTexture(gl.TEXTURE_2D, model.texture);
-      // 绘制
-      gl.drawArrays(gl.TRIANGLES, 0, model.numVertices);
+    for (final model in models) {
+      model.render(gl);
     }
   }
 
@@ -516,7 +508,7 @@ void main(void)
       renderBackground();
     }
     cameraPos =
-        vm.Vector3(sin(current / 1000) * 10, cos(current / 1000) * 10, 0);
+        vm.Vector3(0.5 * sin(current / 1000) * 10, 0.5 * cos(current / 1000) * 10, 0);
     cameraFront = vm.Vector3(0.0, 0.0, 0.0) - cameraPos;
     cameraUp = vm.Vector3(
         sin(current / 1000 + pi / 2), cos(current / 1000 + pi / 2), 0);
