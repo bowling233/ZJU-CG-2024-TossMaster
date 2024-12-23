@@ -1003,7 +1003,10 @@ void main(void)
   // 游戏循环
   // ***************************************************************
 
-  gameLoop() {}
+  gameLoop() {
+
+    //mySphere.update();
+  }
 
   animate() {
     render();

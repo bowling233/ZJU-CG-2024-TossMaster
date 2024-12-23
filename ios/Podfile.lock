@@ -1,0 +1,159 @@
+PODS:
+  - camera_avfoundation (0.0.1):
+    - Flutter
+  - DartCvIOS (4.10.0.5):
+    - DartCvIOS/calib3d (= 4.10.0.5)
+    - DartCvIOS/contrib (= 4.10.0.5)
+    - DartCvIOS/core (= 4.10.0.5)
+    - DartCvIOS/features2d (= 4.10.0.5)
+    - DartCvIOS/imgproc (= 4.10.0.5)
+    - DartCvIOS/objdetect (= 4.10.0.5)
+    - DartCvIOS/photo (= 4.10.0.5)
+    - DartCvIOS/stitching (= 4.10.0.5)
+    - DartCvIOS/video (= 4.10.0.5)
+  - DartCvIOS/calib3d (4.10.0.5):
+    - DartCvIOS/core
+  - DartCvIOS/contrib (4.10.0.5):
+    - DartCvIOS/core
+  - DartCvIOS/core (4.10.0.5)
+  - DartCvIOS/dnn (4.10.0.5):
+    - DartCvIOS/core
+  - DartCvIOS/features2d (4.10.0.5):
+    - DartCvIOS/core
+  - DartCvIOS/imgproc (4.10.0.5):
+    - DartCvIOS/core
+  - DartCvIOS/objdetect (4.10.0.5):
+    - DartCvIOS/core
+  - DartCvIOS/photo (4.10.0.5):
+    - DartCvIOS/core
+  - DartCvIOS/stitching (4.10.0.5):
+    - DartCvIOS/core
+  - DartCvIOS/video (4.10.0.5):
+    - DartCvIOS/core
+  - DartCvIOS/videoio (4.10.0.5):
+    - DartCvIOS/core
+  - DKImagePickerController/Core (4.3.9):
+    - DKImagePickerController/ImageDataManager
+    - DKImagePickerController/Resource
+  - DKImagePickerController/ImageDataManager (4.3.9)
+  - DKImagePickerController/PhotoGallery (4.3.9):
+    - DKImagePickerController/Core
+    - DKPhotoGallery
+  - DKImagePickerController/Resource (4.3.9)
+  - DKPhotoGallery (0.0.19):
+    - DKPhotoGallery/Core (= 0.0.19)
+    - DKPhotoGallery/Model (= 0.0.19)
+    - DKPhotoGallery/Preview (= 0.0.19)
+    - DKPhotoGallery/Resource (= 0.0.19)
+    - SDWebImage
+    - SwiftyGif
+  - DKPhotoGallery/Core (0.0.19):
+    - DKPhotoGallery/Model
+    - DKPhotoGallery/Preview
+    - SDWebImage
+    - SwiftyGif
+  - DKPhotoGallery/Model (0.0.19):
+    - SDWebImage
+    - SwiftyGif
+  - DKPhotoGallery/Preview (0.0.19):
+    - DKPhotoGallery/Model
+    - DKPhotoGallery/Resource
+    - SDWebImage
+    - SwiftyGif
+  - DKPhotoGallery/Resource (0.0.19):
+    - SDWebImage
+    - SwiftyGif
+  - file_picker (0.0.1):
+    - DKImagePickerController/PhotoGallery
+    - Flutter
+  - Flutter (1.0.0)
+  - flutter_gl (0.0.3):
+    - Flutter
+    - three3d_egl (~> 0.1.3)
+  - gal (1.0.0):
+    - Flutter
+    - FlutterMacOS
+  - image_picker_ios (0.0.1):
+    - Flutter
+  - opencv_dart (0.0.1):
+    - DartCvIOS (= 4.10.0.5)
+    - DartCvIOS/dnn (= 4.10.0.5)
+    - DartCvIOS/videoio (= 4.10.0.5)
+    - Flutter
+  - path_provider_foundation (0.0.1):
+    - Flutter
+    - FlutterMacOS
+  - permission_handler_apple (9.3.0):
+    - Flutter
+  - SDWebImage (5.20.0):
+    - SDWebImage/Core (= 5.20.0)
+  - SDWebImage/Core (5.20.0)
+  - sensors_plus (0.0.1):
+    - Flutter
+  - SwiftyGif (5.4.5)
+  - three3d_egl (0.1.3)
+
+DEPENDENCIES:
+  - camera_avfoundation (from `.symlinks/plugins/camera_avfoundation/ios`)
+  - file_picker (from `.symlinks/plugins/file_picker/ios`)
+  - Flutter (from `Flutter`)
+  - flutter_gl (from `.symlinks/plugins/flutter_gl/ios`)
+  - gal (from `.symlinks/plugins/gal/darwin`)
+  - image_picker_ios (from `.symlinks/plugins/image_picker_ios/ios`)
+  - opencv_dart (from `.symlinks/plugins/opencv_dart/ios`)
+  - path_provider_foundation (from `.symlinks/plugins/path_provider_foundation/darwin`)
+  - permission_handler_apple (from `.symlinks/plugins/permission_handler_apple/ios`)
+  - sensors_plus (from `.symlinks/plugins/sensors_plus/ios`)
+
+SPEC REPOS:
+  trunk:
+    - DartCvIOS
+    - DKImagePickerController
+    - DKPhotoGallery
+    - SDWebImage
+    - SwiftyGif
+    - three3d_egl
+
+EXTERNAL SOURCES:
+  camera_avfoundation:
+    :path: ".symlinks/plugins/camera_avfoundation/ios"
+  file_picker:
+    :path: ".symlinks/plugins/file_picker/ios"
+  Flutter:
+    :path: Flutter
+  flutter_gl:
+    :path: ".symlinks/plugins/flutter_gl/ios"
+  gal:
+    :path: ".symlinks/plugins/gal/darwin"
+  image_picker_ios:
+    :path: ".symlinks/plugins/image_picker_ios/ios"
+  opencv_dart:
+    :path: ".symlinks/plugins/opencv_dart/ios"
+  path_provider_foundation:
+    :path: ".symlinks/plugins/path_provider_foundation/darwin"
+  permission_handler_apple:
+    :path: ".symlinks/plugins/permission_handler_apple/ios"
+  sensors_plus:
+    :path: ".symlinks/plugins/sensors_plus/ios"
+
+SPEC CHECKSUMS:
+  camera_avfoundation: dd002b0330f4981e1bbcb46ae9b62829237459a4
+  DartCvIOS: 8b1a5ef6cae756d046a22269d12bde7ccd8829c2
+  DKImagePickerController: 946cec48c7873164274ecc4624d19e3da4c1ef3c
+  DKPhotoGallery: b3834fecb755ee09a593d7c9e389d8b5d6deed60
+  file_picker: 09aa5ec1ab24135ccd7a1621c46c84134bfd6655
+  Flutter: e0871f40cf51350855a761d2e70bf5af5b9b5de7
+  flutter_gl: 5a5603f35db897697f064027864a32b15d0c421d
+  gal: 6a522c75909f1244732d4596d11d6a2f86ff37a5
+  image_picker_ios: c560581cceedb403a6ff17f2f816d7fea1421fc1
+  opencv_dart: 06ecfd452134c362abd0510ae329bfe3f418f2e2
+  path_provider_foundation: 2b6b4c569c0fb62ec74538f866245ac84301af46
+  permission_handler_apple: 9878588469a2b0d0fc1e048d9f43605f92e6cec2
+  SDWebImage: 73c6079366fea25fa4bb9640d5fb58f0893facd8
+  sensors_plus: 7229095999f30740798f0eeef5cd120357a8f4f2
+  SwiftyGif: 706c60cf65fa2bc5ee0313beece843c8eb8194d4
+  three3d_egl: de2cd4950ad2d5f2122166c36583bde4c812e7b5
+
+PODFILE CHECKSUM: 819463e6a0290f5a72f145ba7cde16e8b6ef0796
+
+COCOAPODS: 1.16.2
