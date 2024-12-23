@@ -27,35 +27,57 @@ TossMaster
 
 ---
 
-## 3.1 Flutter 缺少基础设施
+## 3.1 缺少基础设施的 Flutter
 
+![bg right:45% contain](presentation.assets/flutter_no_infra.png)
 
+极少有人在跨平台框架中直接使用 OpenGL 这类底层库进行开发。
+
+<style scoped>
+table {
+ font-size: 20px;
+}
+blockquote {
+ font-size: 18px;
+}
+</style>
+
+| 项目 | 状态 |
+| --- | --- |
+| [google/dart-gl](https://github.com/google/dart-gl)<br/>Dart 原生 GLES2 扩展 | 2022 年停止维护 |
+| [alnitak/flutter_opengl](https://github.com/alnitak/flutter_opengl)<br/>GLSL 玩具罢了😢（[ShaderToy.com](https://www.shadertoy.com/)） | 2022 年 |
+| [wasabia/flutter_gl](https://github.com/wasabia/flutter_gl)<br/>通过 `dart:ffi` 绑定到 C 接口 | 2022 年 |
+
+> Star 数均不超过 200，![width:50px](https://user-images.githubusercontent.com/6718144/101553774-3bc7b000-39ad-11eb-8a6a-de2daa31bd64.png)Flame 它不香吗？
 
 ---
 
-### `flutter_gl` 的绘制方式
+### `wasabia/flutter_gl` 的绘制方式
 
-```mermaid
-flowchart
-	subgraph s1["Dart Binding"]
-		n3["We"]
-		n1["FrameBuffer 离屏渲染"]
-	end
-	subgraph s2["Native"]
-		n2["NativeTexture"]
-	end
-	n1 --- n2
-	n3["你"] --- n1
-```
+![bg right contain](presentation.assets/flutter_gl.svg)
 
 ---
 
+## 3.2 百花齐放的图像编码
 
-## 3.2 Dart 是一门函数式语言
+从 `startImageStream((image) async {})` 获得的 `image` 可能为：
+
+- iOS：BGRA8888
+- Android：YUV420
+
+启动相机串流后，OpenGL 和 Flutter Widget 帧率均显著下降。
+
+![bg right:40% contain](presentation.assets/profile.png)
+
+<!-- _footer: "*Reference [Real-time Machine Learning with Flutter Camera | KBTG LifeMohamed Nohassi](https://medium.com/kbtg-life/real-time-machine-learning-with-flutter-camera-bbcf1b5c3193)*" -->
+---
+
+## 3.3 Dart 是一门函数式语言
 
 Dart 是一款由 Google 开发的函数式编程语言，你将在 Flutter 框架中探索无状态和数据的不可变性......
 
 ![bg right:30% contain](presentation.assets/video-lag.gif)
+
 
 ![](https://docs.flutter.dev/assets/images/docs/development/data-and-backend/state-mgmt/ui-equals-function-of-state.png)
 
@@ -66,6 +88,61 @@ Dart 是一款由 Google 开发的函数式编程语言，你将在 Flutter 框�
 ### 拒绝重绘！
 
 将所有状态存储在一个 Widget 中，状态变更在 Widget 内部处理。
+
+---
+
+## 3.4 何尝不算一种 AR？
+
+- 最初计划：借助 OpenCV 的 ArUco Marker 实现，然而
+  - `opencv_dart` 缺少关键的相机姿态估计函数 `solvePnP` 和 `estimatePoseSingleMarkers` 的绑定。
+  - OpenCV 相机姿态解析需要先对相机进行大量的标定（Camera Calibration），涉及计算机视觉相关的内容，难以在项目时间内完成。
+- 求助 AR 框架：
+  - 平台分裂：安卓 ARCore，iOS ARKit
+    - `arcore_flutter_plugin` 缺少相机参数接口。
+    - `arkit_plugin` 具有接口，但开发人员缺少 iOS 设备，无法测试。
+  - `ar_flutter_plugin` 实现了两者的跨平台支持，但年久失修，有严重的依赖问题。
+- 手搓 PnP 或 RANSAC 算法？超出课程范围。
+
+---
+
+## 换个思路：传感器
+
+移动端设备具有加速度计、陀螺仪，可以感知设备的运动状态。
+
+- 加速度计：离散采样难以获得准确的位移信息。使用 $\mathrm{d}x = v_x \cdot \mathrm{d}t + \frac{1}{2} a_x \cdot \mathrm{d}t^2$ 计算，转动时出现明显漂移，走半天却没有位移变化（无加速度）。
+- 陀螺仪：角速度信息 $\mathrm{rad/s}$，可积分得到旋转角度，实测表现良好。旁轴旋转时产生偏移，暂未探究原因。
+
+---
+
+## 3.5 鸿蒙与安卓亦有不同☹️
+
+<style scoped>
+pre {
+  background-color: transparent;
+}
+</style>
+
+```text
+OpenGL Error: 1282
+Error compiling shader:
+S0059: 'binding' qualifier is not allowed in language version 300 es
+```
+
+![](presentation.assets/glsl_diff.png)
+
+<!-- _footer: "*Reference [OpenGL ES Shading Language Version 3.00](https://www.khronos.org/registry/OpenGL/specs/es/3.0/GLSL_ES_Specification_3.00.pdf)*，OpenGL ES 3.20 得到支持" -->
+
+---
+
+## 寸土寸金的移动端存储
+
+```txt
+S0032: no default precision defined for variable 'varyingNormal'
+L0001 The fragment matrix variable proj_matrix does not match the vertex variable proj_matrix.
+  The matrix stride does not match.
+```
+
+所有数据都需要
 
 ---
 

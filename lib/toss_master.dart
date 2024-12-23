@@ -810,11 +810,13 @@ class _TossMasterState extends State<TossMaster> with WidgetsBindingObserver {
     }
     var vs = """#version $version
 
+precision mediump float;
 layout (location = 0) in vec3 vertPos;
 layout (location = 1) in vec2 tex_coord;
 layout (location = 2) in vec3 vertNormal;
 layout (location = 3) in mat4 instanceMatrix;
 layout (location = 7) in int instanceFlag;
+
 out vec3 varyingNormal;
 out vec3 varyingLightDir;
 out vec3 varyingVertPos;
@@ -828,25 +830,16 @@ struct PositionalLight
 	vec4 specular;
 	vec3 position;
 };
-struct Material
-{	vec4 ambient;
-	vec4 diffuse;
-	vec4 specular;
-	float shininess;
-};
 
 uniform vec4 globalAmbient;
 uniform PositionalLight light;
-uniform Material material;
 uniform mat4 v_matrix;
 uniform mat4 proj_matrix;
-uniform mat4 norm_matrix;
-layout (binding=0) uniform sampler2D s;
+uniform sampler2D s;
 
 void main(void)
 {	varyingVertPos = (v_matrix * instanceMatrix * vec4(vertPos,1.0)).xyz;
 	varyingLightDir = light.position - varyingVertPos;
-	// varyingNormal = (norm_matrix * vec4(vertNormal,1.0)).xyz;
   mat4 mvMat = v_matrix * instanceMatrix;
   mat4 invTrMat = transpose(inverse(mvMat));
   varyingNormal = (invTrMat * vec4(vertNormal, 0.0)).xyz;
@@ -864,6 +857,7 @@ void main(void)
 
     var fs = """#version $version
 
+precision mediump float;
 in vec3 varyingNormal;
 in vec3 varyingLightDir;
 in vec3 varyingVertPos;
@@ -880,20 +874,11 @@ struct PositionalLight
 	vec3 position;
 };
 
-struct Material
-{	vec4 ambient;
-	vec4 diffuse;
-	vec4 specular;
-	float shininess;
-};
-
 uniform vec4 globalAmbient;
 uniform PositionalLight light;
-uniform Material material;
 uniform mat4 v_matrix;
 uniform mat4 proj_matrix;
-uniform mat4 norm_matrix;
-layout (binding=0) uniform sampler2D s;
+uniform sampler2D s;
 
 void main(void)
 { // normalize the light, normal, and view vectors:
@@ -1015,7 +1000,7 @@ void main(void)
   animate() {
     render();
 
-    Future.delayed(const Duration(milliseconds: 33), () {
+    Future.delayed(const Duration(milliseconds: 20), () {
       animate();
     });
   }
@@ -1160,7 +1145,7 @@ void main(void)
   }
 
   void requestPermission() async {
-    if (!kIsWeb) {
+    if (Platform.isAndroid && Platform.isIOS) {
       var cameraStatus = await Permission.camera.status;
       if (!cameraStatus.isGranted) {
         await Permission.camera.request();
