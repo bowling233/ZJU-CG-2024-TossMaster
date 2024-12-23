@@ -65,14 +65,10 @@ class TossMaster extends StatefulWidget {
 }
 
 class _TossMasterState extends State<TossMaster> with WidgetsBindingObserver {
-  List<ImportedModel> models = [];
-  // ***********************
+
+  // ***************************************************************
   // UI
-  // - OpenGL 场景
-  // - 控制面板
-  //   - 模式控制面板
-  //   - 模式切换
-  // ***********************
+  // ***************************************************************
   Mode _mode = Mode.editCamera;
   // imglib.Image? testData;
   int? _selectedModelIndex, _selectedModelInstanceIndex;
@@ -276,7 +272,7 @@ class _TossMasterState extends State<TossMaster> with WidgetsBindingObserver {
             ElevatedButton.icon(
               icon: const Icon(Icons.gps_fixed),
               onPressed: () => setState(() {
-                listenGyroscope = !listenGyroscope;
+                _listenGyroscope = !_listenGyroscope;
               }),
               label: const Text('陀螺仪'),
             ),
@@ -578,63 +574,10 @@ class _TossMasterState extends State<TossMaster> with WidgetsBindingObserver {
     }
   }
 
-  // ***********************
-  // 相机
-  // ***********************
-  List<CameraDescription> cameras = [];
-  CameraController? cameraController;
-  late Throttler throttler; // Throttler to limit camera frame rate
-  NativeUint8Array? cameraData; // 背景纹理数据
-  double fov = 45.0;
-  bool cameraFlipH = false, cameraFlipV = false;
-  int cameraRotation = 0;
-  double cameraVelocity = 0.1;
-
-  void streamCameraImage() {
-    if (cameraController?.value.isStreamingImages == false) {
-      cameraController?.startImageStream((image) async {
-        throttler.run(() async {
-          // convert image to Image
-          imglib.Image processedImage = convertCameraImage(image);
-          int x = ((processedImage.width - (width * dpr).toInt()) ~/ 2);
-          int y = ((processedImage.height - (height * dpr).toInt()) ~/ 2);
-          processedImage = imglib.copyCrop(processedImage,
-              x: x,
-              y: y,
-              width: (width * dpr).toInt(),
-              height: (height * dpr).toInt());
-          if (cameraFlipH) {
-            processedImage = imglib.flipHorizontal(processedImage);
-          }
-          if (cameraFlipV) {
-            processedImage = imglib.flipVertical(processedImage);
-          }
-          if (cameraRotation != 0) {
-            processedImage =
-                imglib.copyRotate(processedImage, angle: cameraRotation);
-          }
-
-          cameraData = NativeUint8Array.from(processedImage.toUint8List());
-          // setState(() {});
-
-          // debug: print image and data properties
-          developer.log(
-              "[startImageStream] image: ${processedImage.width}x${processedImage.height} ${processedImage.format}");
-          developer.log("[startImageStream] cameraData: ${cameraData!.length}");
-        });
-      });
-    } else {
-      cameraController?.stopImageStream();
-      cameraData = null;
-    }
-  }
-
-  // ***********************
-  // OpenGL 部分
-  // ***********************
+  // ***************************************************************
+  // OpenGL：Widget 初始化和离屏渲染准备
+  // ***************************************************************
   late FlutterGlPlugin flutterGlPlugin;
-
-  // 离屏渲染
   num dpr = 1.0;
   Size? screenSize;
   late double width;
@@ -642,7 +585,6 @@ class _TossMasterState extends State<TossMaster> with WidgetsBindingObserver {
   dynamic sourceTexture;
   dynamic defaultFbo;
   dynamic defaultFboTex;
-  // 创建 FBO 用于离屏渲染
   setupDefaultFBO() {
     final gl = flutterGlPlugin.gl;
     int glWidth = (width * dpr).toInt();
@@ -672,23 +614,90 @@ class _TossMasterState extends State<TossMaster> with WidgetsBindingObserver {
         gl.RENDERBUFFER, defaultFboRbo);
   }
 
-  // 场景用
-  late int sceneProgram;
-  vm.Vector3 cameraPos = vm.Vector3(0.0, 0.0, 12.0),
-      cameraFront = vm.Vector3(0.0, 0.0, -1.0),
-      cameraUp = vm.Vector3(0.0, 1.0, 0.0);
-  late vm.Matrix4 pMat;
-  late vm.Matrix4 vMat =
-      vm.makeViewMatrix(cameraPos, cameraPos + cameraFront, cameraUp);
-  //sphere.Sphere mySphere = sphere.Sphere();
+  setup() async {
+    // web no need use fbo
+    if (!kIsWeb) {
+      await flutterGlPlugin.prepareContext();
 
-  int t = DateTime.now().millisecondsSinceEpoch;
+      setupDefaultFBO();
+      sourceTexture = defaultFboTex;
+    }
 
-  // 背景
+    setState(() {});
 
+    prepareBackground();
+    prepareScene();
+
+    animate();
+  }
+
+  // Platform messages are asynchronous, so we initialize in an async method.
+  Future<void> initPlatformState() async {
+    width = screenSize!.width;
+    height = width;
+
+    flutterGlPlugin = FlutterGlPlugin();
+
+    Map<String, dynamic> options = {
+      "antialias": true,
+      "alpha": false,
+      "width": width.toInt(),
+      "height": height.toInt(),
+      "dpr": dpr
+    };
+
+    await flutterGlPlugin.initialize(options: options);
+
+    setState(() {});
+
+    // web need wait dom ok!!!
+    Future.delayed(const Duration(milliseconds: 100), () {
+      setup();
+    });
+  }
+
+  initSize(BuildContext context) {
+    if (screenSize != null) {
+      return;
+    }
+
+    final mq = MediaQuery.of(context);
+
+    screenSize = mq.size;
+    dpr = mq.devicePixelRatio;
+
+    developer.log("[initSize] screenSize: $screenSize dpr: $dpr ");
+
+    initPlatformState();
+  }
+
+  Widget _build(BuildContext context) {
+    initSize(context);
+
+    return Container(
+        width: width,
+        height: width,
+        color: Colors.black,
+        child: Builder(builder: (BuildContext context) {
+          if (kIsWeb) {
+            return flutterGlPlugin.isInitialized
+                ? HtmlElementView(
+                    viewType: flutterGlPlugin.textureId!.toString())
+                : Container();
+          } else {
+            return flutterGlPlugin.isInitialized
+                ? Texture(textureId: flutterGlPlugin.textureId!)
+                : Container();
+          }
+        }));
+  }
+
+  // ***************************************************************
+  // OpenGL：背景
+  // ***************************************************************
+  late int bgProgram;
   late int bgVao;
   List<dynamic> bgVbo = [];
-  late int bgProgram; // 背景着色器
   dynamic bgTexture;
   prepareBackground() {
     final gl = flutterGlPlugin.gl;
@@ -775,33 +784,13 @@ class _TossMasterState extends State<TossMaster> with WidgetsBindingObserver {
     gl.drawArrays(gl.TRIANGLE_FAN, 0, 4);
   }
 
-  // 场景数据准备
-  prepareScene() async {
+  // ***********************
+  // OpenGL：场景
+  // ***********************
+  late int sceneProgram;
+  List<ImportedModel> models = [];
+  prepareScene() {
     final gl = flutterGlPlugin.gl;
-    // 顶点
-
-    // late String objPath, texPath;
-    // FilePickerResult? result = await FilePicker.platform.pickFiles();
-    // if (result != null) {
-    //   developer.log("selected file: ${result.files.single.path}");
-    //   objPath = result.files.single.path!;
-    // }
-
-    // // 纹理
-    // result = await FilePicker.platform.pickFiles();
-    // if (result != null) {
-    //   developer.log("selected file: ${result.files.single.path}");
-    //   texPath = result.files.single.path!;
-    // }
-
-    // models.add(ImportedModel(gl, objPath, texPath));
-    // models[0].instantiate(gl, vm.Matrix4.translation(vm.Vector3(0, 0, 0)));
-    // models[0].instantiate(gl, vm.Matrix4.translation(vm.Vector3(2, 0, 0)));
-    // models[0].instantiate(gl, vm.Matrix4.translation(vm.Vector3(0, 2, 0)));
-
-    // **********
-    // 着色器
-    // **********
     String version = "300 es";
     if (!kIsWeb) {
       if (Platform.isMacOS || Platform.isWindows) {
@@ -929,18 +918,22 @@ void main(void)
     var projLoc = gl.getUniformLocation(sceneProgram, "proj_matrix");
 
     // 投影矩阵
-    pMat =
-        vm.makePerspectiveMatrix(vm.radians(fov), width / height, 0.1, 1000.0);
+    pMat = vm.makePerspectiveMatrix(
+        vm.radians(cameraFov), width / height, 0.1, 1000.0);
     gl.uniformMatrix4fv(projLoc, false, pMat.storage);
     // 视图矩阵
     vMat = vm.makeViewMatrix(cameraPos, cameraPos + cameraFront, cameraUp);
     gl.uniformMatrix4fv(vLoc, false, vMat.storage);
 
+    // 实例化渲染
     for (final model in models) {
       model.render(gl);
     }
   }
 
+  // ***************************************************************
+  // OpenGL：光照
+  // ***************************************************************
   // ADS 光照：环境光、漫反射、镜面反射
   List<double> globalAmbient = [0.7, 0.7, 0.7, 1.0];
   List<double> lightAmbient = [0.0, 0.0, 0.0, 1.0];
@@ -966,6 +959,15 @@ void main(void)
     gl.uniform3fv(posLoc, transformed.storage);
   }
 
+  // ***************************************************************
+  // OpenGL：游戏
+  // ***************************************************************
+  //sphere.Sphere mySphere = sphere.Sphere();
+
+  // ***************************************************************
+  // OpenGL：渲染
+  // ***************************************************************
+  int t = DateTime.now().millisecondsSinceEpoch;
   render() {
     final gl = flutterGlPlugin.gl;
     int current = DateTime.now().millisecondsSinceEpoch;
@@ -997,31 +999,98 @@ void main(void)
     }
   }
 
+  // ***************************************************************
+  // 游戏循环
+  // ***************************************************************
+
+  gameLoop() {}
+
   animate() {
     render();
+    gameLoop();
 
     Future.delayed(const Duration(milliseconds: 20), () {
       animate();
     });
   }
 
-  // ********************
-  // Init State
-  // ********************
-  @override
-  void didChangeAppLifecycleState(AppLifecycleState state) {
-    super.didChangeAppLifecycleState(state);
-    if (cameraController == null ||
-        cameraController?.value.isInitialized == false) {
-      return;
-    }
+  // ***************************************************************
+  // 外围设备
+  // ***************************************************************
+  // 陀螺仪
+  bool _listenGyroscope = false;
+  GyroscopeEvent? _gyroscopeEvent;
+  int? _gyroscopeLastInterval;
+  final _streamSubscriptions = <StreamSubscription<dynamic>>[];
+  DateTime? _gyroscopeUpdateTime;
+  static const Duration _ignoreDuration = Duration(milliseconds: 20);
+  Duration sensorInterval = SensorInterval.gameInterval;
+  double _gyroscopeSensitivity = 0.5;
 
-    if (state == AppLifecycleState.inactive) {
-      cameraController?.dispose();
-    } else if (state == AppLifecycleState.resumed) {
-      _setupCameraController();
-    }
+  _setupGyroscope() {
+    _streamSubscriptions.add(
+      gyroscopeEventStream(samplingPeriod: sensorInterval).listen(
+        (GyroscopeEvent event) {
+          final now = event.timestamp;
+          setState(() {
+            _gyroscopeEvent = event;
+            if (_gyroscopeUpdateTime != null) {
+              final interval = now.difference(_gyroscopeUpdateTime!);
+              if (interval > _ignoreDuration) {
+                _gyroscopeLastInterval = interval.inMilliseconds;
+              }
+            }
+          });
+          _gyroscopeUpdateTime = now;
+
+          if (_gyroscopeEvent != null && _listenGyroscope) {
+            final dt = _gyroscopeLastInterval != null
+                ? _gyroscopeLastInterval! / 1000.0
+                : 0.033; // 默认 33ms
+
+            // 旋转矩阵
+            final rotationMatrix = vm.Matrix4.rotationX(
+                    _gyroscopeEvent!.x * dt * _gyroscopeSensitivity) *
+                vm.Matrix4.rotationY(
+                    _gyroscopeEvent!.y * dt * _gyroscopeSensitivity) *
+                vm.Matrix4.rotationZ(
+                    _gyroscopeEvent!.z * dt * _gyroscopeSensitivity);
+
+            // 更新相机方向
+            cameraFront = rotationMatrix.transform3(cameraFront);
+            cameraFront.normalize();
+            cameraUp = rotationMatrix.transform3(cameraUp);
+            cameraUp.normalize();
+          }
+        },
+        onError: (e) {
+          showDialog(
+              context: context,
+              builder: (context) {
+                return const AlertDialog(
+                  title: Text("Sensor Not Found"),
+                  content: Text(
+                      "It seems that your device doesn't support Gyroscope Sensor"),
+                );
+              });
+        },
+        cancelOnError: true,
+      ),
+    );
   }
+
+  // 相机
+  CameraController? cameraController;
+  Throttler cameraThrottler = Throttler(milliSeconds: 33); // 图像流限速器
+  NativeUint8Array? cameraData; // 背景纹理数据
+  double cameraFov = 45.0;
+  double cameraVelocity = 0.1;
+  vm.Vector3 cameraPos = vm.Vector3(0.0, 0.0, 12.0),
+      cameraFront = vm.Vector3(0.0, 0.0, -1.0),
+      cameraUp = vm.Vector3(0.0, 1.0, 0.0);
+  late vm.Matrix4 pMat;
+  late vm.Matrix4 vMat =
+      vm.makeViewMatrix(cameraPos, cameraPos + cameraFront, cameraUp);
 
   Future<void> _setupCameraController() async {
     WidgetsFlutterBinding.ensureInitialized();
@@ -1032,7 +1101,6 @@ void main(void)
             (element) => element.lensDirection == CameraLensDirection.back,
           )
           .first;
-      // debug: print camera properties
       developer.log(
           "[_setupCameraController] selected camera: ${cameraDescription.name} ${cameraDescription.lensDirection}");
 
@@ -1050,7 +1118,6 @@ void main(void)
           return;
         }
         setState(() {});
-        // debug: print camera properties
         developer.log(
             "[_setupCameraController] ${cameraController?.value.previewSize} ");
       }).catchError(
@@ -1061,90 +1128,50 @@ void main(void)
     }
   }
 
-  // ***********************
-  // 相机和传感器
-  // ***********************
-  GyroscopeEvent? _gyroscopeEvent;
-  int? _gyroscopeLastInterval;
-  final _streamSubscriptions = <StreamSubscription<dynamic>>[];
-  Duration sensorInterval = SensorInterval.normalInterval;
-  DateTime? _gyroscopeUpdateTime;
-  static const Duration _ignoreDuration = Duration(milliseconds: 20);
-  // 是否开启
-  bool listenGyroscope = false;
-  // 滤波参数
-  double alpha = 0.2; // 滤波强度，值越低滤波效果越明显
-  vm.Vector3 filteredAcceleration = vm.Vector3.zero(); // 用于保存滤波后的加速度数据
-
   @override
-  void initState() {
-    super.initState();
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    super.didChangeAppLifecycleState(state);
+    if (cameraController == null ||
+        cameraController?.value.isInitialized == false) {
+      return;
+    }
 
-    // 相机
-    requestPermission();
-    _setupCameraController();
-
-    // 陀螺仪
-    _streamSubscriptions.add(
-      gyroscopeEventStream(samplingPeriod: sensorInterval).listen(
-        (GyroscopeEvent event) {
-          final now = event.timestamp;
-          setState(() {
-            _gyroscopeEvent = event;
-            if (_gyroscopeUpdateTime != null) {
-              final interval = now.difference(_gyroscopeUpdateTime!);
-              if (interval > _ignoreDuration) {
-                _gyroscopeLastInterval = interval.inMilliseconds;
-              }
-            }
-          });
-          _gyroscopeUpdateTime = now;
-          // 根据陀螺仪更新相机方向
-          if (_gyroscopeEvent != null && listenGyroscope) {
-            final dt = _gyroscopeLastInterval != null
-                ? _gyroscopeLastInterval! / 1000.0
-                : 0.033; // 默认 33ms
-
-            final rotation = vm.Vector3(
-              _gyroscopeEvent!.x * dt,
-              _gyroscopeEvent!.y * dt,
-              _gyroscopeEvent!.z * dt,
-            );
-
-            // 旋转矩阵
-            final rotationMatrix = vm.Matrix4.rotationX(rotation.x) *
-                vm.Matrix4.rotationY(rotation.y) *
-                vm.Matrix4.rotationZ(rotation.z);
-
-            // 更新相机方向
-            cameraFront = rotationMatrix.transform3(cameraFront);
-            cameraFront.normalize();
-            cameraUp = rotationMatrix.transform3(cameraUp);
-            cameraUp.normalize();
-
-            developer.log("[gyroscopeEvent] cameraFront: $cameraFront");
-            developer.log("[gyroscopeEvent] cameraUp: $cameraUp");
-          }
-        },
-        onError: (e) {
-          showDialog(
-              context: context,
-              builder: (context) {
-                return const AlertDialog(
-                  title: Text("Sensor Not Found"),
-                  content: Text(
-                      "It seems that your device doesn't support Gyroscope Sensor"),
-                );
-              });
-        },
-        cancelOnError: true,
-      ),
-    );
-
-    throttler = Throttler(milliSeconds: 33);
+    if (state == AppLifecycleState.inactive) {
+      cameraController?.dispose();
+    } else if (state == AppLifecycleState.resumed) {
+      _setupCameraController();
+    }
   }
 
-  void requestPermission() async {
+  void streamCameraImage() {
+    if (cameraController?.value.isStreamingImages == false) {
+      cameraController?.startImageStream((image) async {
+        cameraThrottler.run(() async {
+          imglib.Image processedImage = convertCameraImage(image);
+          int x = ((processedImage.width - (width * dpr).toInt()) ~/ 2);
+          int y = ((processedImage.height - (height * dpr).toInt()) ~/ 2);
+          processedImage = imglib.copyCrop(processedImage,
+              x: x,
+              y: y,
+              width: (width * dpr).toInt(),
+              height: (height * dpr).toInt());
+
+          cameraData = NativeUint8Array.from(processedImage.toUint8List());
+
+          // debug: print image and data properties
+          developer.log(
+              "[startImageStream] image: ${processedImage.width}x${processedImage.height} ${processedImage.format}");
+          developer.log("[startImageStream] cameraData: ${cameraData!.length}");
+        });
+      });
+    } else {
+      cameraController?.stopImageStream();
+      cameraData = null;
+    }
+  }
+
+  // 外围设备仅在应用启动时初始化一次
+  void _requestPermission() async {
     if (Platform.isAndroid && Platform.isIOS) {
       var cameraStatus = await Permission.camera.status;
       if (!cameraStatus.isGranted) {
@@ -1153,86 +1180,14 @@ void main(void)
     }
   }
 
-  // ********************
-  // Build (Prepare)
-  // ********************
+  @override
+  void initState() {
+    super.initState();
 
-  setup() async {
-    // web no need use fbo
-    if (!kIsWeb) {
-      await flutterGlPlugin.prepareContext();
+    _requestPermission();
 
-      setupDefaultFBO();
-      sourceTexture = defaultFboTex;
-    }
-
-    setState(() {});
-
-    prepareBackground();
-    await prepareScene();
-
-    animate();
-  }
-
-  // Platform messages are asynchronous, so we initialize in an async method.
-  Future<void> initPlatformState() async {
-    width = screenSize!.width;
-    height = width;
-
-    flutterGlPlugin = FlutterGlPlugin();
-
-    Map<String, dynamic> options = {
-      "antialias": true,
-      "alpha": false,
-      "width": width.toInt(),
-      "height": height.toInt(),
-      "dpr": dpr
-    };
-
-    await flutterGlPlugin.initialize(options: options);
-
-    setState(() {});
-
-    // web need wait dom ok!!!
-    Future.delayed(const Duration(milliseconds: 100), () {
-      setup();
-    });
-  }
-
-  initSize(BuildContext context) {
-    if (screenSize != null) {
-      return;
-    }
-
-    final mq = MediaQuery.of(context);
-
-    screenSize = mq.size;
-    dpr = mq.devicePixelRatio;
-
-    developer.log("[initSize] screenSize: $screenSize dpr: $dpr ");
-
-    initPlatformState();
-  }
-
-  Widget _build(BuildContext context) {
-    initSize(context);
-
-    return Container(
-        width: width,
-        height: width,
-        color: Colors.black,
-        child: Builder(builder: (BuildContext context) {
-          if (kIsWeb) {
-            return flutterGlPlugin.isInitialized
-                ? HtmlElementView(
-                    viewType: flutterGlPlugin.textureId!.toString())
-                : Container();
-          } else {
-            return flutterGlPlugin.isInitialized
-                ? Texture(textureId: flutterGlPlugin.textureId!)
-                : Container();
-          }
-        }));
+    _setupCameraController();
+    _setupGyroscope();
   }
 
   @override

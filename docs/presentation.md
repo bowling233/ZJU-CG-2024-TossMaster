@@ -11,15 +11,52 @@ TossMaster
 
 ---
 
-# 一、项目内容
+# 一、项目内容及 Demo 展示
 
 ---
 
-# 二、Demo 展示
+## 1.1 核心玩法
+
 
 ---
 
-# 三、心得与体会
+## 1.2 项目亮点：AR 和移动端跨平台实现
+
+本项目构思时的目标就是高级要求中的两条内容：
+
+- （8 分）不依赖现有引擎，采用 iOS/Android 平台实现。
+- （7 分）与增强现实应用结合。
+
+---
+
+## 1.3 基本要求：模型与纹理
+
+- 基本体素
+- OBJ 模型及其纹理导入
+- 材质
+
+---
+
+## 1.4 基本要求：几何变换
+
+用户与画面交互以控制模型：
+
+- 单击选中
+- 拖动平移
+- 双指缩放
+- 双指旋转
+
+![bg contain opacity:.4](presentation.assets/video-nolag.gif)
+![bg contain opacity:.4](presentation.assets/video-nolag.gif)
+![bg contain opacity:.4](presentation.assets/video-nolag.gif)
+
+---
+
+## 1.5 基本要求：光照模型
+
+---
+
+# 二、心得与体会
 
 ##### 充满着荆棘与坎坷的跨平台开发之路
 
@@ -27,7 +64,7 @@ TossMaster
 
 ---
 
-## 3.1 缺少基础设施的 Flutter
+## 2.1 缺少基础设施的 Flutter
 
 ![bg right:45% contain](presentation.assets/flutter_no_infra.png)
 
@@ -58,21 +95,60 @@ blockquote {
 
 ---
 
-## 3.2 百花齐放的图像编码
+## 2.2 百花齐放的图像编码
 
 从 `startImageStream((image) async {})` 获得的 `image` 可能为：
 
 - iOS：BGRA8888
 - Android：YUV420
 
-启动相机串流后，OpenGL 和 Flutter Widget 帧率均显著下降。
+然而 OpenGL `glTexImage2D` 只支持 RGB、RGBA 等格式。
+
+![](presentation.assets/gles_texImg.png)
+
+<!-- _footer: "*Reference [OpenGL ES 3.0 Reference Pages](https://registry.khronos.org/OpenGL-Refpages/es3.0/)*" -->
+
+---
+
+## 糟糕的访存模式
 
 ![bg right:40% contain](presentation.assets/profile.png)
 
-<!-- _footer: "*Reference [Real-time Machine Learning with Flutter Camera | KBTG LifeMohamed Nohassi](https://medium.com/kbtg-life/real-time-machine-learning-with-flutter-camera-bbcf1b5c3193)*" -->
+对于转换后 RGBA 图像的每个像素，逐次访问明度和色度平面，并且**两个平面的 Stride 不同**。
+
+```dart
+imglib.Image convertYUV420ToImage(CameraImage cameraImage) {
+  for (int h = 0; h < imageHeight; h++) {
+    int uvh = (h / 2).floor();
+    for (int w = 0; w < imageWidth; w++) {
+      int uvw = (w / 2).floor();
+
+      final yIndex = (h * yRowStride) + (w * yPixelStride);
+
+      final int y = yBuffer[yIndex];
+
+      final int uvIndex = (uvh * uvRowStride) + (uvw * uvPixelStride);
+
+      final int u = uBuffer[uvIndex];
+      final int v = vBuffer[uvIndex];
+
+      int r = (y + v * 1436 / 1024 - 179).round();
+      int g = (y - u * 46549 / 131072 + 44 - v * 93604 / 131072 + 91).round();
+      int b = (y + u * 1814 / 1024 - 227).round();
+
+      r = r.clamp(0, 255); g = g.clamp(0, 255); b = b.clamp(0, 255);
+
+      image.setPixelRgb(imageHeight - h - 1, imageWidth - w - 1, r, g, b);
+    }
+  }
+}
+```
+
+<!-- _footer: "*Reference [Alby-o/image_converter.dart](https://gist.github.com/Alby-o/fe87e35bc21d534c8220aed7df028e03)*" -->
+
 ---
 
-## 3.3 Dart 是一门函数式语言
+## 2.3 Dart 是一门函数式语言
 
 Dart 是一款由 Google 开发的函数式编程语言，你将在 Flutter 框架中探索无状态和数据的不可变性......
 
@@ -89,9 +165,11 @@ Dart 是一款由 Google 开发的函数式编程语言，你将在 Flutter 框�
 
 将所有状态存储在一个 Widget 中，状态变更在 Widget 内部处理。
 
+~~然后代码变成史山，UI 和程序逻辑混杂在一起，背离函数式编程的初衷。~~
+
 ---
 
-## 3.4 何尝不算一种 AR？
+## 2.4 何尝不算一种 AR？
 
 - 最初计划：借助 OpenCV 的 ArUco Marker 实现，然而
   - `opencv_dart` 缺少关键的相机姿态估计函数 `solvePnP` 和 `estimatePoseSingleMarkers` 的绑定。
@@ -112,15 +190,11 @@ Dart 是一款由 Google 开发的函数式编程语言，你将在 Flutter 框�
 - 加速度计：离散采样难以获得准确的位移信息。使用 $\mathrm{d}x = v_x \cdot \mathrm{d}t + \frac{1}{2} a_x \cdot \mathrm{d}t^2$ 计算，转动时出现明显漂移，走半天却没有位移变化（无加速度）。
 - 陀螺仪：角速度信息 $\mathrm{rad/s}$，可积分得到旋转角度，实测表现良好。旁轴旋转时产生偏移，暂未探究原因。
 
+> 不同设备的传感器精度和采样率不同，需要进行校准和平滑处理。
+
 ---
 
-## 3.5 鸿蒙与安卓亦有不同☹️
-
-<style scoped>
-pre {
-  background-color: transparent;
-}
-</style>
+## 2.5 鸿蒙与安卓亦有不同☹️
 
 ```text
 OpenGL Error: 1282
@@ -142,7 +216,8 @@ L0001 The fragment matrix variable proj_matrix does not match the vertex variabl
   The matrix stride does not match.
 ```
 
-所有数据都需要
+![](presentation.assets/glsl_default_precision.png)
+
 
 ---
 
