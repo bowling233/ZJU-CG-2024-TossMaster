@@ -18,8 +18,19 @@ import 'package:sensors_plus/sensors_plus.dart';
 
 import 'opengl_utils.dart';
 import 'opengl_model.dart';
+import 'opengl_sphere.dart' as sphere;
+
+vm.Vector3 gravity = vm.Vector3(0.0, -9.8, 0.0);
+
+// 银色材质
+const List<double> silverAmbient = [0.1923, 0.1923, 0.1923, 1.0];
+const List<double> silverDiffuse = [0.5075, 0.5075, 0.5075, 1.0];
+const List<double> silverSpecular = [0.5083, 0.5083, 0.5083, 1.0];
+const double silverShininess = 51.2;
 
 enum Mode { editScene, game, editLight, editCamera }
+
+enum GameMode { pre, act, over }
 
 class Throttler {
   Throttler({required this.milliSeconds});
@@ -65,7 +76,6 @@ class TossMaster extends StatefulWidget {
 }
 
 class _TossMasterState extends State<TossMaster> with WidgetsBindingObserver {
-
   // ***************************************************************
   // UI
   // ***************************************************************
@@ -95,7 +105,7 @@ class _TossMasterState extends State<TossMaster> with WidgetsBindingObserver {
                   // 如果已选中特定实例，则取消选中
                   if (_selectedModelIndex != null &&
                       _selectedModelInstanceIndex != null) {
-                    models[_selectedModelIndex!].unSelect();
+                    _models[_selectedModelIndex!].unSelect();
                     _selectedModelInstanceIndex = null;
                     return;
                   }
@@ -105,10 +115,10 @@ class _TossMasterState extends State<TossMaster> with WidgetsBindingObserver {
                   tMin = double.infinity;
                   ({int index, double t}) testResult =
                       (index: -1, t: double.infinity);
-                  developer.log("${models.length}");
-                  for (var i = 0; i < models.length; i++) {
+                  developer.log("${_models.length}");
+                  for (var i = 0; i < _models.length; i++) {
                     developer.log("i: $i");
-                    var myResult = models[i].hitTest(
+                    var myResult = _models[i].hitTest(
                         screenToNDC(
                             vm.Vector2(
                                 event.localPosition.dx, event.localPosition.dy),
@@ -127,7 +137,7 @@ class _TossMasterState extends State<TossMaster> with WidgetsBindingObserver {
                   // 选中模型
                   if (_selectedModelIndex != null &&
                       _selectedModelInstanceIndex != null) {
-                    models[_selectedModelIndex!]
+                    _models[_selectedModelIndex!]
                         .select(_selectedModelInstanceIndex!);
                   }
                 }),
@@ -163,7 +173,7 @@ class _TossMasterState extends State<TossMaster> with WidgetsBindingObserver {
                   lastScale = event.scale;
                   developer.log("scaleDiff: $scaleDiff");
 
-                  models[_selectedModelIndex!].transform(
+                  _models[_selectedModelIndex!].transform(
                       _selectedModelInstanceIndex!,
                       positionDelta,
                       rotationDelta,
@@ -237,7 +247,7 @@ class _TossMasterState extends State<TossMaster> with WidgetsBindingObserver {
       gifPath = result.files.single.path!;
     }
 
-    models.add(ImportedModel(gl, objPath, texPath, gifPath: gifPath));
+    _models.add(ImportedModel(gl, objPath, texPath, gifPath: gifPath));
     setState(() {});
   }
 
@@ -514,7 +524,7 @@ class _TossMasterState extends State<TossMaster> with WidgetsBindingObserver {
               icon: const Icon(Icons.add),
               onPressed: _selectedModelIndex != null
                   ? () {
-                      models[_selectedModelIndex!].instantiate();
+                      _models[_selectedModelIndex!].instantiate();
                     }
                   : null,
               label: const Text('添加实例'),
@@ -524,7 +534,7 @@ class _TossMasterState extends State<TossMaster> with WidgetsBindingObserver {
           SizedBox(
               height: 150.0,
               child: ListView.builder(
-                itemCount: models.length,
+                itemCount: _models.length,
                 scrollDirection: Axis.horizontal,
                 itemBuilder: (context, index) {
                   return GestureDetector(
@@ -547,9 +557,9 @@ class _TossMasterState extends State<TossMaster> with WidgetsBindingObserver {
                         padding: _selectedModelIndex == index
                             ? const EdgeInsets.all(8.0)
                             : null,
-                        child: models[index].gifPath == null
-                            ? Image.file(File(models[index].texPath))
-                            : Image.file(File(models[index].gifPath!)),
+                        child: _models[index].gifPath == null
+                            ? Image.file(File(_models[index].texPath))
+                            : Image.file(File(_models[index].gifPath!)),
                       ),
                     ),
                   );
@@ -563,11 +573,35 @@ class _TossMasterState extends State<TossMaster> with WidgetsBindingObserver {
       case Mode.game:
         return Column(
           children: [
+            // 速度显示
+            Text("速度：${_sphere.instanceVelocity[0].length}"),
             // 投掷按钮
-            ElevatedButton.icon(
-              icon: const Icon(Icons.add),
-              onPressed: () {},
-              label: const Text('添加模型'),
+            GestureDetector(
+              child: ElevatedButton.icon(
+                icon: const Icon(Icons.add),
+                onPressed: () {},
+                label: const Text('投掷'),
+              ),
+              // 按下：加速
+              onTapDown: (_) {
+                _gameMode = GameMode.pre;
+                _sphere.instanceVelocity[0] = vm.Vector3.zero();
+                _timers.addLast(
+                    Timer.periodic(const Duration(milliseconds: 100), (_) {
+                  _sphere.instanceVelocity[0] += vm.Vector3.all(1);
+                  setState(() {});
+                }));
+              },
+              onTapCancel: () {
+                if (_timers.isNotEmpty) _timers.removeFirst().cancel();
+                var curr = 0;
+                var rMat = vm.Matrix4.identity();
+                rMat.rotate(cameraFront.cross(cameraUp), vm.radians(40.0));
+                var tmp = vm.Vector3.copy(cameraFront);
+                tmp.scale(_sphere.instanceVelocity[curr].length);
+                _sphere.instanceVelocity[curr] = rMat.transform3(tmp);
+                _gameMode = GameMode.act;
+              },
             ),
           ],
         );
@@ -788,7 +822,8 @@ class _TossMasterState extends State<TossMaster> with WidgetsBindingObserver {
   // OpenGL：场景
   // ***********************
   late int sceneProgram;
-  List<ImportedModel> models = [];
+  List<ImportedModel> _models = [];
+  late sphere.Sphere _sphere;
   prepareScene() {
     final gl = flutterGlPlugin.gl;
     String version = "300 es";
@@ -820,8 +855,16 @@ struct PositionalLight
 	vec3 position;
 };
 
+struct Material
+{	vec4 ambient;
+  vec4 diffuse;
+  vec4 specular;
+  float shininess;
+};
+
 uniform vec4 globalAmbient;
 uniform PositionalLight light;
+uniform Material material;
 uniform mat4 v_matrix;
 uniform mat4 proj_matrix;
 uniform sampler2D s;
@@ -863,8 +906,16 @@ struct PositionalLight
 	vec3 position;
 };
 
+struct Material
+{	vec4 ambient;
+  vec4 diffuse;
+  vec4 specular;
+  float shininess;
+};
+
 uniform vec4 globalAmbient;
 uniform PositionalLight light;
+uniform Material material;
 uniform mat4 v_matrix;
 uniform mat4 proj_matrix;
 uniform sampler2D s;
@@ -895,12 +946,23 @@ void main(void)
   if(flag == 1)
     // highlight selected model
     fragColor = vec4(vec3(1.0, 0.0, 0.0) * (ambient + diffuse + specular), 1.0);
+  else if(flag == 2)
+  {
+    // material
+    ambient = ((globalAmbient * material.ambient) + (light.ambient * material.ambient)).xyz;
+    diffuse = light.diffuse.xyz * material.diffuse.xyz * max(cosTheta,0.0);
+    specular = light.specular.xyz * material.specular.xyz * pow(max(cosPhi,0.0), material.shininess*3.0);
+    fragColor = vec4((ambient + diffuse + specular), 1.0);
+  }
   else
     fragColor = vec4(textureColor.xyz * (ambient + diffuse + specular), textureColor.a);
 }
 """;
 
     sceneProgram = createShaderProgram(gl, vs, fs);
+
+    _sphere = sphere.Sphere(gl);
+    _sphere.instantiate();
   }
 
   renderScene() {
@@ -926,14 +988,21 @@ void main(void)
     gl.uniformMatrix4fv(vLoc, false, vMat.storage);
 
     // 实例化渲染
-    for (final model in models) {
+    for (final model in _models) {
       model.render(gl);
     }
+
+    _sphere.render(gl);
   }
 
   // ***************************************************************
-  // OpenGL：光照
+  // OpenGL：光照与
   // ***************************************************************
+  // 银色材质
+  List<double> silverAmbient = [0.1923, 0.1923, 0.1923, 1.0];
+  List<double> silverDiffuse = [0.5075, 0.5075, 0.5075, 1.0];
+  List<double> silverSpecular = [0.5083, 0.5083, 0.5083, 1.0];
+  double silverShininess = 51.2;
   // ADS 光照：环境光、漫反射、镜面反射
   List<double> globalAmbient = [0.7, 0.7, 0.7, 1.0];
   List<double> lightAmbient = [0.0, 0.0, 0.0, 1.0];
@@ -949,6 +1018,10 @@ void main(void)
     final diffLoc = gl.getUniformLocation(sceneProgram, "light.diffuse");
     final specLoc = gl.getUniformLocation(sceneProgram, "light.specular");
     final posLoc = gl.getUniformLocation(sceneProgram, "light.position");
+    final mambLoc = gl.getUniformLocation(sceneProgram, "material.ambient");
+    final mdiffLoc = gl.getUniformLocation(sceneProgram, "material.diffuse");
+    final mspecLoc = gl.getUniformLocation(sceneProgram, "material.specular");
+    final mshinyLoc = gl.getUniformLocation(sceneProgram, "material.shininess");
 
     gl.useProgram(sceneProgram);
 
@@ -957,6 +1030,10 @@ void main(void)
     gl.uniform4fv(diffLoc, NativeFloat32Array.from(lightDiffuse));
     gl.uniform4fv(specLoc, NativeFloat32Array.from(lightSpecular));
     gl.uniform3fv(posLoc, transformed.storage);
+    gl.uniform4fv(mambLoc, NativeFloat32Array.from(silverAmbient));
+    gl.uniform4fv(mdiffLoc, NativeFloat32Array.from(silverDiffuse));
+    gl.uniform4fv(mspecLoc, NativeFloat32Array.from(silverSpecular));
+    gl.uniform1f(mshinyLoc, silverShininess);
   }
 
   // ***************************************************************
@@ -990,7 +1067,6 @@ void main(void)
     }
     installLights();
     renderScene();
-    // renderSphere();
 
     // 上屏
     gl.finish();
@@ -1002,10 +1078,43 @@ void main(void)
   // ***************************************************************
   // 游戏循环
   // ***************************************************************
-
+  GameMode _gameMode = GameMode.pre;
+  var lastTime = 0;
   gameLoop() {
+    var currentTime = DateTime.now().millisecondsSinceEpoch;
+    var dt = currentTime - lastTime;
+    lastTime = currentTime;
 
-    //mySphere.update();
+    if (_gameMode == GameMode.pre) {
+      // 设定球体初始位置
+      var curr = 0;
+      var rMat = vm.Matrix4.identity();
+      rMat.rotate(cameraFront.cross(cameraUp), vm.radians(-35.0));
+      var tmp = vm.Vector3.copy(cameraFront);
+      tmp.scale(5);
+      _sphere.instancePosition[curr] = cameraPos + rMat.transform3(tmp);
+      _sphere.instanceScale[curr] = 1.8;
+    } else if (_gameMode == GameMode.act) {
+      var curr = 0;
+      // 物体运动
+      for (final model in _models) {
+        //model.update(dt, gravity);
+      }
+      _sphere.update(dt, gravity);
+
+      // 碰撞检测
+      for (var i = 0; i < _models.length; i++) {
+        for (var j = 0; j < _models[i].instancePosition.length; j++) {
+          var curr = 0;
+          if (_sphere.collision(curr, _models[i], j)) {
+            _models[i].instanceFlag[j] = 1;
+            _gameMode = GameMode.over;
+          } else {
+            _models[i].instanceFlag[j] = 0;
+          }
+        }
+      }
+    }
   }
 
   animate() {

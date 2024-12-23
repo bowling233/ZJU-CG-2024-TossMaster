@@ -14,6 +14,11 @@ class ImportedModel {
   final int texture;
   final String texPath;
   String? gifPath;
+  // 碰撞盒数据
+  final Vector3 halfSize;
+  final int boxVao;
+  final dynamic boxVbo;
+
   // 实例数据
   final List<Vector3> instancePosition = [];
   final List<Vector3> instanceVelocity = [];
@@ -21,6 +26,7 @@ class ImportedModel {
   final List<double> instanceScale = [];
   // final List<Matrix4> instanceMatrix = [];
   final List<int> instanceFlag = [];
+  final List<Vector3> instanceHalfSize = [];
 
   factory ImportedModel(gl, String objPath, String texPath, {String? gifPath}) {
     // 顶点数据：解析 OBJ 文件
@@ -144,15 +150,62 @@ class ImportedModel {
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
 
-    return ImportedModel._internal(
-        numVertices, vao, vbo, texture, triangleVerts, texPath, gifPath);
+    // 包围盒计算
+    List<double> xVals = [];
+    List<double> yVals = [];
+    List<double> zVals = [];
+
+    for (var i = 0; i < triangleVerts.length; i += 3) {
+      xVals.add(triangleVerts[i]);
+      yVals.add(triangleVerts[i + 1]);
+      zVals.add(triangleVerts[i + 2]);
+    }
+
+    xVals.sort();
+    yVals.sort();
+    zVals.sort();
+
+    final halfSize = Vector3((xVals.last - xVals.first) / 2,
+        (yVals.last - yVals.first) / 2, (zVals.last - zVals.first) / 2);
+
+    // 包围盒的顶点数据，按 GL_LINES 绘制
+    List<double> points = [
+      xVals.first,
+      yVals.first,
+      zVals.first,
+      xVals.last,
+      yVals.first,
+      zVals.first,
+      xVals.first,
+      yVals.last,
+      zVals.first,
+      xVals.last,
+      yVals.last,
+      zVals.first,
+      xVals.first,
+      yVals.first,
+      zVals.last,
+      xVals.last,
+      yVals.first,
+      zVals.last,
+      xVals.first,
+      yVals.last,
+      zVals.last,
+      xVals.last,
+      yVals.last,
+      zVals.last,
+    ];
+
+    // move2origin
+
+    return ImportedModel._internal(numVertices, vao, vbo, texture,
+        triangleVerts, texPath, gifPath, halfSize);
   }
 
   ImportedModel._internal(this.numVertices, this.vao, this.vbo, this.texture,
-      this.vertices, this.texPath, this.gifPath);
+      this.vertices, this.texPath, this.gifPath, this.halfSize);
 
   void instantiate() {
-    // instanceMatrix.add(modelMatrix);
     instancePosition.add(Vector3(0, 0, 0));
     instanceVelocity.add(Vector3(0, 0, 0));
     instanceRotation.add(Quaternion.identity());
@@ -162,6 +215,7 @@ class ImportedModel {
 
   // 渲染
   void render(gl) {
+    if (instancePosition.isEmpty) return;
     // 模型数据
     gl.bindVertexArray(vao);
     gl.bindBuffer(gl.ARRAY_BUFFER, vbo[0]);
@@ -170,7 +224,6 @@ class ImportedModel {
     gl.activeTexture(gl.TEXTURE0);
     gl.bindTexture(gl.TEXTURE_2D, texture);
     // 实例数据
-    if (instancePosition.isEmpty) return;
     List<double> mMatrix = [];
     for (var i = 0; i < instancePosition.length; i++) {
       var modelMatrix = Matrix4.compose(instancePosition[i],
@@ -262,10 +315,25 @@ class ImportedModel {
     return (index: selectedIdx, t: tMin);
   }
 
+  // 模型变换
   void transform(int index, Vector3 positionDelta, Quaternion rotationDelta,
       double scaleDelta) {
     instancePosition[index] += positionDelta;
     instanceRotation[index] = rotationDelta * instanceRotation[index];
     instanceScale[index] += scaleDelta;
+  }
+
+  // 模型运动
+  void update(int millis, Vector3 gravity) {
+    for (var i = 0; i < instancePosition.length; i++) {
+      // 位移更新
+      var tmp = Vector3.copy(instanceVelocity[i]);
+      tmp.scale(millis / 1000);
+      instancePosition[i] += tmp;
+      // 速度更新
+      tmp = Vector3.copy(gravity);
+      tmp.scale(millis / 1000);
+      instanceVelocity[i] += tmp;
+    }
   }
 }
