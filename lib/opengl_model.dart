@@ -12,9 +12,9 @@ class ImportedModel {
   final int vao;
   final List<dynamic> vbo;
   // 纹理数据
-  final int texture; // 如果为 -1，则使用材质
-  String? texPath;
-  String? gifPath;
+  int? texture; // 如果为空，则使用材质
+  Uint8List? texData;
+  Uint8List? gifData;
   // 碰撞盒数据
   final Vector3 halfSize;
   final int boxVao;
@@ -29,7 +29,9 @@ class ImportedModel {
   final List<int> instanceFlag = [];
   final List<Vector3> instanceHalfSize = [];
 
-  factory ImportedModel(gl, String objPath, String? texPath, String? gifPath) {
+  factory ImportedModel(
+      gl, String objData, Uint8List? texData, Uint8List? gifData) {
+    log('ImportedModel.assets()');
     // 顶点数据：解析 OBJ 文件
     final List<double> vertVals = [];
     final List<double> triangleVerts = [];
@@ -38,8 +40,7 @@ class ImportedModel {
     final List<double> normals = [];
     final List<double> normVals = [];
 
-    final file = File(objPath);
-    final lines = file.readAsLinesSync();
+    final lines = objData.split('\n');
 
     for (var line in lines) {
       if (line.startsWith('v ')) {
@@ -138,15 +139,15 @@ class ImportedModel {
     gl.enableVertexAttribArray(7);
 
     // 纹理数据
-    var texture = -1;
-    if (texPath != null) {
-      var img =
-          decodeImage(File(texPath).readAsBytesSync())!.convert(numChannels: 4);
-      img = flipVertical(img);
-      var textureData = NativeUint8Array.from(img.toUint8List());
+    int? texture;
+    if (texData != null) {
+      log('ImportedModel.assets() texData');
+      Image texImg = decodeImage(texData)!.convert(numChannels: 4);
+      texImg = flipVertical(texImg);
+      var textureData = NativeUint8Array.from(texImg.toUint8List());
       texture = gl.createTexture();
       gl.bindTexture(gl.TEXTURE_2D, texture);
-      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, img.width, img.height, 0,
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, texImg.width, texImg.height, 0,
           gl.RGBA, gl.UNSIGNED_BYTE, textureData);
       gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
       gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
@@ -194,20 +195,30 @@ class ImportedModel {
     gl.vertexAttribPointer(0, 3, gl.FLOAT, false, 0, 0);
     gl.enableVertexAttribArray(0);
 
-    // move2origin
+    // gif
 
-    return ImportedModel._internal(numVertices, vao, vbo, texture,
-        triangleVerts, texPath, gifPath, halfSize, boxVao, boxVbo);
+    return ImportedModel._internal(
+      numVertices,
+      triangleVerts,
+      vao,
+      vbo,
+      texture,
+      texData,
+      gifData,
+      halfSize,
+      boxVao,
+      boxVbo,
+    );
   }
 
   ImportedModel._internal(
       this.numVertices,
+      this.vertices,
       this.vao,
       this.vbo,
       this.texture,
-      this.vertices,
-      this.texPath,
-      this.gifPath,
+      this.texData,
+      this.gifData,
       this.halfSize,
       this.boxVao,
       this.boxVbo);

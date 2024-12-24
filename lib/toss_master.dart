@@ -6,6 +6,7 @@ import 'dart:developer' as developer;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show rootBundle;
 
 import 'package:flutter_gl/flutter_gl.dart';
 import 'package:flutter_gl/native-array/NativeArray.app.dart';
@@ -15,7 +16,6 @@ import 'package:camera/camera.dart';
 import 'package:vector_math/vector_math.dart' as vm;
 import 'package:file_picker/file_picker.dart';
 import 'package:sensors_plus/sensors_plus.dart';
-// import 'package:sleek_circular_slider/sleek_circular_slider.dart';
 import 'package:syncfusion_flutter_gauges/gauges.dart';
 
 import 'opengl_utils.dart';
@@ -223,8 +223,8 @@ class _TossMasterState extends State<TossMaster> with WidgetsBindingObserver {
   }
 
   importModel(gl) async {
-    late String objPath;
-    String? gifPath, texPath;
+    late String objData;
+    Uint8List? texData, gifData;
     await showDialog(
       context: context,
       builder: (BuildContext context) {
@@ -245,22 +245,25 @@ class _TossMasterState extends State<TossMaster> with WidgetsBindingObserver {
     );
     FilePickerResult? result = await FilePicker.platform.pickFiles();
     if (result != null) {
-      objPath = result.files.single.path!;
+      var objPath = result.files.single.path!;
+      objData = await File(objPath).readAsString();
     } else {
       return;
     }
 
     result = await FilePicker.platform.pickFiles();
     if (result != null) {
-      texPath = result.files.single.path!;
+      var texPath = result.files.single.path!;
+      texData = await File(texPath).readAsBytes();
     }
 
     result = await FilePicker.platform.pickFiles();
     if (result != null) {
-      gifPath = result.files.single.path!;
+      var gifPath = result.files.single.path!;
+      gifData = await File(gifPath).readAsBytes();
     }
 
-    _models.add(ImportedModel(gl, objPath, texPath, gifPath));
+    _models.add(ImportedModel(gl, objData, texData, gifData));
     setState(() {});
   }
 
@@ -518,6 +521,20 @@ class _TossMasterState extends State<TossMaster> with WidgetsBindingObserver {
               },
             ),
           ]),
+          // 陀螺仪敏感度控制
+          Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+            const Text("陀螺仪敏感度："),
+            Slider(
+              value: _gyroscopeSensitivity,
+              onChanged: (value) {
+                setState(() {
+                  _gyroscopeSensitivity = value;
+                });
+              },
+              min: 0.0,
+              max: 3.0,
+            ),
+          ]),
         ]);
       // 场景编辑模式
       case ControlMode.editScene:
@@ -568,8 +585,8 @@ class _TossMasterState extends State<TossMaster> with WidgetsBindingObserver {
                         padding: _selectedModelIndex == index
                             ? const EdgeInsets.all(8.0)
                             : null,
-                        child: _models[index].gifPath == null
-                            ? (_models[index].texPath == null
+                        child: _models[index].gifData == null
+                            ? (_models[index].texData == null
                                 ? Container(
                                     width: 150,
                                     height: 150,
@@ -578,8 +595,8 @@ class _TossMasterState extends State<TossMaster> with WidgetsBindingObserver {
                                       child: Text('No Image'),
                                     ),
                                   )
-                                : Image.file(File(_models[index].texPath!)))
-                            : Image.file(File(_models[index].gifPath!)),
+                                : Image.memory(_models[index].texData!))
+                            : Image.memory(_models[index].gifData!),
                       ),
                     ),
                   );
@@ -890,6 +907,14 @@ class _TossMasterState extends State<TossMaster> with WidgetsBindingObserver {
 
     prepareBackground();
     prepareScene();
+    // 从 rootBundle 提供初始模型
+    final gl = flutterGlPlugin.gl;
+    final objData = await rootBundle.loadString('assets/models/ArcticFox.obj');
+    final texData = await rootBundle.load('assets/models/ArcticFox.png');
+    texData.buffer.asUint8List();
+    final gifData = await rootBundle.load('assets/models/ArcticFox.gif');
+    _models.add(ImportedModel(gl, objData, texData.buffer.asUint8List(),
+        gifData.buffer.asUint8List()));
 
     animate();
   }
@@ -962,6 +987,7 @@ class _TossMasterState extends State<TossMaster> with WidgetsBindingObserver {
   late int bgVao;
   List<dynamic> bgVbo = [];
   dynamic bgTexture;
+  late int bgWidth, bgHeight;
   prepareBackground() {
     final gl = flutterGlPlugin.gl;
     // 背景着色器
@@ -1037,8 +1063,8 @@ class _TossMasterState extends State<TossMaster> with WidgetsBindingObserver {
     // 绑定纹理
     gl.bindTexture(gl.TEXTURE_2D, bgTexture);
     // 传递纹理数据
-    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGB, (width * dpr).toInt(),
-        (height * dpr).toInt(), 0, gl.RGB, gl.UNSIGNED_BYTE, cameraData);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGB, bgWidth, bgHeight, 0, gl.RGB,
+        gl.UNSIGNED_BYTE, cameraData);
     // 设置纹理单元
     gl.activeTexture(gl.TEXTURE0);
     gl.uniform1i(gl.getUniformLocation(bgProgram, 'bgTexture'), 0);
@@ -1051,7 +1077,7 @@ class _TossMasterState extends State<TossMaster> with WidgetsBindingObserver {
   // OpenGL：场景
   // ***********************
   late int sceneProgram;
-  List<ImportedModel> _models = [];
+  final List<ImportedModel> _models = [];
   late sphere.Sphere _sphere;
   prepareScene() {
     final gl = flutterGlPlugin.gl;
@@ -1225,7 +1251,7 @@ void main(void)
   }
 
   // ***************************************************************
-  // OpenGL：光照与
+  // OpenGL：光照与材质
   // ***************************************************************
   // 当前选择的材质
   GlMaterial _currentMaterial = GlMaterial.gold;
@@ -1324,11 +1350,6 @@ void main(void)
         break;
     }
   }
-
-  // ***************************************************************
-  // OpenGL：游戏
-  // ***************************************************************
-  //sphere.Sphere mySphere = sphere.Sphere();
 
   // ***************************************************************
   // OpenGL：渲染
@@ -1508,7 +1529,7 @@ void main(void)
       setState(() {
         cameraController = CameraController(
           cameraDescription,
-          ResolutionPreset.veryHigh,
+          ResolutionPreset.high,
           enableAudio: false,
           // 32-bit BGRA.
           imageFormatGroup: ImageFormatGroup.bgra8888,
@@ -1549,13 +1570,13 @@ void main(void)
       cameraController?.startImageStream((image) async {
         cameraThrottler.run(() async {
           imglib.Image processedImage = convertCameraImage(image);
-          int x = ((processedImage.width - (width * dpr).toInt()) ~/ 2);
-          int y = ((processedImage.height - (height * dpr).toInt()) ~/ 2);
+          bgWidth = min(processedImage.width, processedImage.height);
+          bgHeight = bgWidth;
+          // 从中心裁切 bgWidth 的正方形
+          int x = (processedImage.width - bgWidth) ~/ 2;
+          int y = (processedImage.height - bgWidth) ~/ 2;
           processedImage = imglib.copyCrop(processedImage,
-              x: x,
-              y: y,
-              width: (width * dpr).toInt(),
-              height: (height * dpr).toInt());
+              x: x, y: y, width: bgWidth, height: bgWidth);
 
           cameraData = NativeUint8Array.from(processedImage.toUint8List());
 
