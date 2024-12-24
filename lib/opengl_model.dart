@@ -1,7 +1,7 @@
-import 'dart:io';
 import 'dart:typed_data';
 import 'dart:developer';
 import 'package:flutter_gl/native-array/NativeArray.app.dart';
+import 'package:toss_master/opengl_utils.dart';
 import 'package:vector_math/vector_math.dart';
 import 'package:image/image.dart';
 
@@ -18,7 +18,7 @@ class ImportedModel {
   // 碰撞盒数据
   final Vector3 halfSize;
   final int boxVao;
-  final dynamic boxVbo;
+  final List<dynamic> boxVbo;
 
   // 实例数据
   final List<Vector3> instancePosition = [];
@@ -82,7 +82,55 @@ class ImportedModel {
 
     final numVertices = triangleVerts.length ~/ 3;
 
-    // 顶点数据：载入 OpenGL
+
+
+    // 包围盒计算
+    List<double> xVals = [];
+    List<double> yVals = [];
+    List<double> zVals = [];
+
+    for (var i = 0; i < triangleVerts.length; i += 3) {
+      xVals.add(triangleVerts[i]);
+      yVals.add(triangleVerts[i + 1]);
+      zVals.add(triangleVerts[i + 2]);
+    }
+
+    xVals.sort();
+    yVals.sort();
+    zVals.sort();
+
+    final halfSize = Vector3((xVals.last - xVals.first) / 2,
+        (yVals.last - yVals.first) / 2, (zVals.last - zVals.first) / 2);
+
+    final centerX = (xVals.last + xVals.first) / 2;
+    final centerY = (yVals.last + yVals.first) / 2;
+    final centerZ = (zVals.last + zVals.first) / 2;
+
+    // 移动模型到中心
+    for (var i = 0; i < triangleVerts.length; i += 3) {
+      triangleVerts[i] -= centerX;
+      triangleVerts[i + 1] -= centerY;
+      triangleVerts[i + 2] -= centerZ;
+    }
+
+    // 包围盒的顶点数据，按 GL_LINES 绘制
+    // 共 12 条边，每条边 2 个顶点，每个顶点 3 个坐标
+    List<double> boxVerts = [
+      halfSize.x, halfSize.y, halfSize.z, halfSize.x, halfSize.y, -halfSize.z,// 1
+      halfSize.x, halfSize.y, -halfSize.z, halfSize.x, -halfSize.y, -halfSize.z,// 2
+      halfSize.x, -halfSize.y, -halfSize.z, halfSize.x, -halfSize.y, halfSize.z,// 3
+      halfSize.x, -halfSize.y, halfSize.z, halfSize.x, halfSize.y, halfSize.z,// 4
+      -halfSize.x, halfSize.y, halfSize.z, -halfSize.x, halfSize.y, -halfSize.z,// 5
+      -halfSize.x, halfSize.y, -halfSize.z, -halfSize.x, -halfSize.y, -halfSize.z,// 6
+      -halfSize.x, -halfSize.y, -halfSize.z, -halfSize.x, -halfSize.y, halfSize.z,// 7
+      -halfSize.x, -halfSize.y, halfSize.z, -halfSize.x, halfSize.y, halfSize.z,// 8
+      halfSize.x, halfSize.y, halfSize.z, -halfSize.x, halfSize.y, halfSize.z,// 9
+      halfSize.x, halfSize.y, -halfSize.z, -halfSize.x, halfSize.y, -halfSize.z,// 10
+      halfSize.x, -halfSize.y, -halfSize.z, -halfSize.x, -halfSize.y, -halfSize.z,// 11
+      halfSize.x, -halfSize.y, halfSize.z, -halfSize.x, -halfSize.y, halfSize.z,// 12
+    ];
+
+        // 顶点数据：载入 OpenGL
     final vao = gl.createVertexArray();
     gl.bindVertexArray(vao);
 
@@ -155,38 +203,13 @@ class ImportedModel {
       gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
     }
 
-    // 包围盒计算
-    List<double> xVals = [];
-    List<double> yVals = [];
-    List<double> zVals = [];
-
-    for (var i = 0; i < triangleVerts.length; i += 3) {
-      xVals.add(triangleVerts[i]);
-      yVals.add(triangleVerts[i + 1]);
-      zVals.add(triangleVerts[i + 2]);
-    }
-
-    xVals.sort();
-    yVals.sort();
-    zVals.sort();
-
-    final halfSize = Vector3((xVals.last - xVals.first) / 2,
-        (yVals.last - yVals.first) / 2, (zVals.last - zVals.first) / 2);
-
-    // 包围盒的顶点数据，按 GL_LINES 绘制
-    // 共 12 条边，每条边 2 个顶点，每个顶点 3 个坐标
-    List<double> boxVerts = [];
-    for (var i = 0; i < 8; i++) {
-      boxVerts.add(i & 1 == 0 ? xVals.first : xVals.last);
-      boxVerts.add(i & 2 == 0 ? yVals.first : yVals.last);
-      boxVerts.add(i & 4 == 0 ? zVals.first : zVals.last);
-    }
-
     final boxVao = gl.createVertexArray();
     gl.bindVertexArray(boxVao);
 
-    final boxVbo = gl.createBuffer();
-    gl.bindBuffer(gl.ARRAY_BUFFER, boxVbo);
+    final boxVbo = List.generate(5, (i) => gl.createBuffer());
+    // 0. vertex 1. texture 2. normal 3. instanceMatrix (4) 7. instanceFlag
+
+    gl.bindBuffer(gl.ARRAY_BUFFER, boxVbo[0]);
     gl.bufferData(
         gl.ARRAY_BUFFER,
         boxVerts.length * Float32List.bytesPerElement,
@@ -194,6 +217,49 @@ class ImportedModel {
         gl.STATIC_DRAW);
     gl.vertexAttribPointer(0, 3, gl.FLOAT, false, 0, 0);
     gl.enableVertexAttribArray(0);
+
+    gl.bindBuffer(gl.ARRAY_BUFFER, boxVbo[1]);
+    gl.bufferData(
+        gl.ARRAY_BUFFER,
+        boxVerts.length * Float32List.bytesPerElement,
+        Float32List.fromList(boxVerts),
+        gl.STATIC_DRAW);
+    gl.vertexAttribPointer(1, 3, gl.FLOAT, false, 0, 0);
+    gl.enableVertexAttribArray(1);
+
+    gl.bindBuffer(gl.ARRAY_BUFFER, boxVbo[2]);
+    gl.bufferData(
+        gl.ARRAY_BUFFER,
+        boxVerts.length * Float32List.bytesPerElement,
+        Float32List.fromList(boxVerts),
+        gl.STATIC_DRAW);
+    gl.vertexAttribPointer(2, 3, gl.FLOAT, false, 0, 0);
+    gl.enableVertexAttribArray(2);
+
+    // 注意：实例数据在渲染时传入
+    // 注意：matrix 特殊，vetexAttribPointer 大小最多为 4，需要用 Stride 来实现
+    gl.bindBuffer(gl.ARRAY_BUFFER, boxVbo[3]);
+    gl.vertexAttribPointer(
+        3, 4, gl.FLOAT, false, 16 * Float32List.bytesPerElement, 0);
+    gl.vertexAttribDivisor(3, 1);
+    gl.enableVertexAttribArray(3);
+    gl.vertexAttribPointer(4, 4, gl.FLOAT, false,
+        16 * Float32List.bytesPerElement, 4 * Float32List.bytesPerElement);
+    gl.vertexAttribDivisor(4, 1);
+    gl.enableVertexAttribArray(4);
+    gl.vertexAttribPointer(5, 4, gl.FLOAT, false,
+        16 * Float32List.bytesPerElement, 8 * Float32List.bytesPerElement);
+    gl.vertexAttribDivisor(5, 1);
+    gl.enableVertexAttribArray(5);
+    gl.vertexAttribPointer(6, 4, gl.FLOAT, false,
+        16 * Float32List.bytesPerElement, 12 * Float32List.bytesPerElement);
+    gl.vertexAttribDivisor(6, 1);
+    gl.enableVertexAttribArray(6);
+
+    gl.bindBuffer(gl.ARRAY_BUFFER, boxVbo[4]);
+    gl.vertexAttribPointer(7, 1, gl.INT, false, 0, 0);
+    gl.vertexAttribDivisor(7, 1);
+    gl.enableVertexAttribArray(7);
 
     // gif
 
@@ -242,9 +308,6 @@ class ImportedModel {
     if (instancePosition.isEmpty) return;
     // 模型数据
     gl.bindVertexArray(vao);
-    gl.bindBuffer(gl.ARRAY_BUFFER, vbo[0]);
-    gl.bindBuffer(gl.ARRAY_BUFFER, vbo[1]);
-    gl.bindBuffer(gl.ARRAY_BUFFER, vbo[2]);
     if (texture == -1) {
       gl.activeTexture(gl.TEXTURE0);
       gl.bindTexture(gl.TEXTURE_2D, 0);
@@ -278,7 +341,6 @@ class ImportedModel {
     if (instancePosition.isEmpty) return;
     // 包围盒数据
     gl.bindVertexArray(boxVao);
-    gl.bindBuffer(gl.ARRAY_BUFFER, boxVbo);
     // 实例数据
     List<double> mMatrix = [];
     for (var i = 0; i < instancePosition.length; i++) {
@@ -286,15 +348,18 @@ class ImportedModel {
           instanceRotation[i], Vector3.all(instanceScale[i]));
       mMatrix.addAll(modelMatrix.storage);
     }
-    gl.bindBuffer(gl.ARRAY_BUFFER, vbo[3]);
+    gl.bindBuffer(gl.ARRAY_BUFFER, boxVbo[3]);
     gl.bufferData(gl.ARRAY_BUFFER, mMatrix.length * Float32List.bytesPerElement,
         Float32List.fromList(mMatrix), gl.STATIC_DRAW);
-    List<int> boxFlag = List.filled(instanceFlag.length, 1);
-    gl.bindBuffer(gl.ARRAY_BUFFER, vbo[4]);
+    List<int> boxFlag = List.filled(instanceFlag.length, 4);
+    gl.bindBuffer(gl.ARRAY_BUFFER, boxVbo[4]);
     gl.bufferData(gl.ARRAY_BUFFER, boxFlag.length * Int32List.bytesPerElement,
         Int32List.fromList(boxFlag), gl.STATIC_DRAW);
     // 实例化绘制
-    gl.drawArraysInstanced(gl.LINES, 0, 8, instancePosition.length);
+    gl.lineWidth(2.0);
+    gl.drawArraysInstanced(gl.LINES, 0, 24, instancePosition.length);
+    checkOpenGLError(gl);
+    log('[ImportedModel.renderBox()]');
   }
 
   // 实例选择

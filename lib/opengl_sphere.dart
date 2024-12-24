@@ -4,25 +4,18 @@ import 'dart:developer' as developer;
 import 'package:vector_math/vector_math.dart';
 import 'opengl_model.dart';
 
-// Todo：
-// 0. 在构建时
-// 1. 实现渲染 render
-// 2. 实现碰撞
-
 class Sphere {
   // 模型数据
   final int numVertices;
   final int numIndices;
-  final List<Vector3> vertices;
   final int vao;
   final List<dynamic> vbo;
-  // 实例数据（虽然只会用到一个实例）
+  // 实例数据
   final List<Vector3> instancePosition = [];
   final List<Vector3> instanceVelocity = [];
   final List<double> instanceScale = [];
   final List<int> instanceFlag = [];
 
-  // Factory constructor for creating a Sphere object
   factory Sphere(gl, {int precision = 48}) {
     // 顶点数据：生成球体
     final numVertices = (precision + 1) * (precision + 1);
@@ -83,6 +76,7 @@ class Sphere {
     gl.bindVertexArray(vao);
 
     final vbo = List.generate(5, (_) => gl.createBuffer());
+    // 0.vertex 1. texture 2. normal 3-6. instanceMatrix 7. instanceFlag 8. EBO
 
     gl.bindBuffer(gl.ARRAY_BUFFER, vbo[0]);
     gl.bufferData(gl.ARRAY_BUFFER, pvalues.length * Float32List.bytesPerElement,
@@ -129,7 +123,6 @@ class Sphere {
     return Sphere._internal(
       numVertices,
       numIndices,
-      vertices,
       vao,
       vbo,
     );
@@ -139,7 +132,6 @@ class Sphere {
   Sphere._internal(
     this.numVertices,
     this.numIndices,
-    this.vertices,
     this.vao,
     this.vbo,
   );
@@ -162,6 +154,8 @@ class Sphere {
     gl.bindBuffer(gl.ARRAY_BUFFER, vbo[0]);
     gl.bindBuffer(gl.ARRAY_BUFFER, vbo[1]);
     gl.bindBuffer(gl.ARRAY_BUFFER, vbo[2]);
+    // 解除纹理绑定
+    gl.bindTexture(gl.TEXTURE_2D, 0);
     // 实例数据
     List<double> mMatrix = [];
     for (var i = 0; i < instancePosition.length; i++) {

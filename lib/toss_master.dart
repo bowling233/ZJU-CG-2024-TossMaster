@@ -143,8 +143,6 @@ class _TossMasterState extends State<TossMaster> with WidgetsBindingObserver {
                   lastRotation = 0.0;
                 },
                 onScaleUpdate: (ScaleUpdateDetails event) => setState(() {
-                  developer.log(
-                      "onScaleUpdate ${event.scale} ${event.focalPointDelta} ${event.rotation}");
                   // 要求已选中特定实例
                   if (_selectedModelIndex == null ||
                       _selectedModelInstanceIndex == null) {
@@ -166,7 +164,6 @@ class _TossMasterState extends State<TossMaster> with WidgetsBindingObserver {
                   // 缩放比例差值
                   var scaleDiff = (event.scale - lastScale);
                   lastScale = event.scale;
-                  developer.log("scaleDiff: $scaleDiff");
 
                   _models[_selectedModelIndex!].transform(
                       _selectedModelInstanceIndex!,
@@ -337,7 +334,7 @@ class _TossMasterState extends State<TossMaster> with WidgetsBindingObserver {
               onTapDown: (_) {
                 _timers.addLast(
                     Timer.periodic(const Duration(milliseconds: 100), (_) {
-                  cameraVelocity += 0.01;
+                  cameraVelocity += 0.1;
                   setState(() {});
                 }));
               },
@@ -352,7 +349,7 @@ class _TossMasterState extends State<TossMaster> with WidgetsBindingObserver {
                   cameraPos = vm.Vector3(0.0, 0.0, 12.0);
                   cameraFront = vm.Vector3(0.0, 0.0, -1.0);
                   cameraUp = vm.Vector3(0.0, 1.0, 0.0);
-                  cameraVelocity = 0.1;
+                  cameraVelocity = 0.5;
                   setState(() {});
                 },
                 label: const Text('重置'))
@@ -708,8 +705,8 @@ class _TossMasterState extends State<TossMaster> with WidgetsBindingObserver {
                       RadialAxis(
                         minimum: 0,
                         maximum: 1,
-                        startAngle: 0,
-                        endAngle: 360,
+                        startAngle: 30,
+                        endAngle: 300,
                         showLabels: true,
                         showTicks: false,
                         pointers: <GaugePointer>[
@@ -1198,19 +1195,26 @@ void main(void)
 	vec3 diffuse = light.diffuse.xyz * max(cosTheta, 0.0);
 	vec3 specular = light.specular.xyz * pow(max(cosPhi, 0.0), 51.2 * 3.0);
 
-  if(flag == 1)
+  switch(flag)
+  {
+  case 1:
     // highlight selected model
     fragColor = vec4(vec3(1.0, 0.0, 0.0) * (ambient + diffuse + specular), 1.0);
-  else if(flag == 2)
-  {
+    break;
+  case 2:
     // material
     ambient = ((globalAmbient * material.ambient) + (light.ambient * material.ambient)).xyz;
     diffuse = light.diffuse.xyz * material.diffuse.xyz * max(cosTheta,0.0);
     specular = light.specular.xyz * material.specular.xyz * pow(max(cosPhi,0.0), material.shininess*3.0);
     fragColor = vec4((ambient + diffuse + specular), 1.0);
-  }
-  else
+    break;
+  case 0:
     fragColor = vec4(textureColor.xyz * (ambient + diffuse + specular), textureColor.a);
+    break;
+  default:
+    fragColor = vec4(0.0, 1.0, 0.0, 1.0);
+    break;
+  }
 }
 """;
 
@@ -1245,6 +1249,7 @@ void main(void)
     // 实例化渲染
     for (final model in _models) {
       model.render(gl);
+      model.renderBox(gl);
     }
 
     if (_controlMode == ControlMode.game) _sphere.render(gl);
@@ -1357,14 +1362,14 @@ void main(void)
   int t = DateTime.now().millisecondsSinceEpoch;
   render() {
     final gl = flutterGlPlugin.gl;
-    int current = DateTime.now().millisecondsSinceEpoch;
-    num blue = (sin((current - t) / 200) + 1) / 2;
-    num green = (cos((current - t) / 300) + 1) / 2;
-    num red = (sin((current - t) / 400) + cos((current - t) / 500) + 2) / 4;
+    // int current = DateTime.now().millisecondsSinceEpoch;
+    // num blue = (sin((current - t) / 200) + 1) / 2;
+    // num green = (cos((current - t) / 300) + 1) / 2;
+    // num red = (sin((current - t) / 400) + cos((current - t) / 500) + 2) / 4;
 
     // 清理
-    // gl.clearColor(0.0, 0.0, 0.0, 0.0);
-    gl.clearColor(red, green, blue, 1.0);
+    gl.clearColor(0.8, 0.8, 0.8, 1.0);
+    // gl.clearColor(red, green, blue, 1.0);
     gl.clearDepth(1);
     gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
 
@@ -1506,7 +1511,7 @@ void main(void)
   Throttler cameraThrottler = Throttler(milliSeconds: 33); // 图像流限速器
   NativeUint8Array? cameraData; // 背景纹理数据
   double cameraFov = 45.0;
-  double cameraVelocity = 0.1;
+  double cameraVelocity = 0.5;
   vm.Vector3 cameraPos = vm.Vector3(0.0, 0.0, 12.0),
       cameraFront = vm.Vector3(0.0, 0.0, -1.0),
       cameraUp = vm.Vector3(0.0, 1.0, 0.0);
