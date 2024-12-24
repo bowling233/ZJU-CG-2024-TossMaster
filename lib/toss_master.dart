@@ -22,13 +22,7 @@ import 'opengl_sphere.dart' as sphere;
 
 vm.Vector3 gravity = vm.Vector3(0.0, -9.8, 0.0);
 
-// 银色材质
-const List<double> silverAmbient = [0.1923, 0.1923, 0.1923, 1.0];
-const List<double> silverDiffuse = [0.5075, 0.5075, 0.5075, 1.0];
-const List<double> silverSpecular = [0.5083, 0.5083, 0.5083, 1.0];
-const double silverShininess = 51.2;
-
-enum Mode { editScene, game, editLight, editCamera }
+enum ControlMode { editScene, game, editLight, editCamera }
 
 enum GameMode { pre, act, over }
 
@@ -79,7 +73,7 @@ class _TossMasterState extends State<TossMaster> with WidgetsBindingObserver {
   // ***************************************************************
   // UI
   // ***************************************************************
-  Mode _mode = Mode.editCamera;
+  ControlMode _mode = ControlMode.editCamera;
   // imglib.Image? testData;
   int? _selectedModelIndex, _selectedModelInstanceIndex;
   double tMin = double.infinity;
@@ -189,31 +183,31 @@ class _TossMasterState extends State<TossMaster> with WidgetsBindingObserver {
               //           ])
               //         : Container()),
               // 模式切换
-              SegmentedButton<Mode>(
-                segments: const <ButtonSegment<Mode>>[
-                  ButtonSegment<Mode>(
-                    value: Mode.editCamera,
+              SegmentedButton<ControlMode>(
+                segments: const <ButtonSegment<ControlMode>>[
+                  ButtonSegment<ControlMode>(
+                    value: ControlMode.editCamera,
                     label: Text('相机'),
                     icon: Icon(Icons.camera),
                   ),
-                  ButtonSegment<Mode>(
-                    value: Mode.editScene,
+                  ButtonSegment<ControlMode>(
+                    value: ControlMode.editScene,
                     label: Text('场景'),
                     icon: Icon(Icons.edit),
                   ),
-                  ButtonSegment<Mode>(
-                    value: Mode.editLight,
+                  ButtonSegment<ControlMode>(
+                    value: ControlMode.editLight,
                     label: Text('光照'),
                     icon: Icon(Icons.lightbulb),
                   ),
-                  ButtonSegment<Mode>(
-                    value: Mode.game,
+                  ButtonSegment<ControlMode>(
+                    value: ControlMode.game,
                     label: Text('游戏'),
                     icon: Icon(Icons.gamepad),
                   ),
                 ],
-                selected: <Mode>{_mode},
-                onSelectionChanged: (Set<Mode> newSelection) {
+                selected: <ControlMode>{_mode},
+                onSelectionChanged: (Set<ControlMode> newSelection) {
                   setState(() {
                     _mode = newSelection.first;
                   });
@@ -265,7 +259,7 @@ class _TossMasterState extends State<TossMaster> with WidgetsBindingObserver {
   Widget get _modeControlWidget {
     switch (_mode) {
       // 相机编辑模式：串流、三轴位移和旋转
-      case Mode.editCamera:
+      case ControlMode.editCamera:
         return Column(children: <Widget>[
           Row(mainAxisAlignment: MainAxisAlignment.center, children: [
             // 串流控制
@@ -345,7 +339,7 @@ class _TossMasterState extends State<TossMaster> with WidgetsBindingObserver {
               child: ElevatedButton.icon(
                 icon: const Icon(Icons.zoom_out_map),
                 onPressed: () {},
-                label: const Text('前进'),
+                label: const Text('前'),
               ),
               onTapDown: (_) {
                 _timers.addLast(
@@ -365,7 +359,7 @@ class _TossMasterState extends State<TossMaster> with WidgetsBindingObserver {
               child: ElevatedButton.icon(
                 icon: const Icon(Icons.zoom_in_map),
                 onPressed: () {},
-                label: const Text('后退'),
+                label: const Text('后'),
               ),
               onTapDown: (_) {
                 _timers.addLast(
@@ -385,7 +379,7 @@ class _TossMasterState extends State<TossMaster> with WidgetsBindingObserver {
               child: ElevatedButton.icon(
                 icon: const Icon(Icons.arrow_upward),
                 onPressed: () {},
-                label: const Text('上升'),
+                label: const Text('上'),
               ),
               onTapDown: (_) {
                 _timers.addLast(
@@ -405,7 +399,7 @@ class _TossMasterState extends State<TossMaster> with WidgetsBindingObserver {
               child: ElevatedButton.icon(
                 icon: const Icon(Icons.arrow_downward),
                 onPressed: () {},
-                label: const Text('下降'),
+                label: const Text('下'),
               ),
               onTapDown: (_) {
                 _timers.addLast(
@@ -428,7 +422,7 @@ class _TossMasterState extends State<TossMaster> with WidgetsBindingObserver {
               child: ElevatedButton.icon(
                 icon: const Icon(Icons.arrow_back),
                 onPressed: () {},
-                label: const Text('左移'),
+                label: const Text('左'),
               ),
               onTapDown: (_) {
                 _timers.addLast(
@@ -448,7 +442,7 @@ class _TossMasterState extends State<TossMaster> with WidgetsBindingObserver {
               child: ElevatedButton.icon(
                 icon: const Icon(Icons.arrow_forward),
                 onPressed: () {},
-                label: const Text('右移'),
+                label: const Text('右'),
               ),
               onTapDown: (_) {
                 _timers.addLast(
@@ -468,7 +462,7 @@ class _TossMasterState extends State<TossMaster> with WidgetsBindingObserver {
               child: ElevatedButton.icon(
                 icon: const Icon(Icons.rotate_left),
                 onPressed: () {},
-                label: const Text('左转'),
+                label: const Text('左'),
               ),
               onTapDown: (_) {
                 _timers.addLast(
@@ -487,7 +481,7 @@ class _TossMasterState extends State<TossMaster> with WidgetsBindingObserver {
               child: ElevatedButton.icon(
                 icon: const Icon(Icons.rotate_right),
                 onPressed: () {},
-                label: const Text('右转'),
+                label: const Text('右'),
               ),
               onTapDown: (_) {
                 _timers.addLast(
@@ -505,10 +499,10 @@ class _TossMasterState extends State<TossMaster> with WidgetsBindingObserver {
           ]),
         ]);
       // 场景编辑模式
-      case Mode.editScene:
+      case ControlMode.editScene:
         return Column(children: <Widget>[
           // 模型管理
-          Row(children: [
+          Row(mainAxisAlignment: MainAxisAlignment.center, children: [
             ElevatedButton.icon(
               icon: const Icon(Icons.upload_file),
               onPressed: () {
@@ -563,10 +557,35 @@ class _TossMasterState extends State<TossMaster> with WidgetsBindingObserver {
               ))
         ]);
       // 光照编辑模式
-      case Mode.editLight:
-        return Container();
+      case ControlMode.editLight:
+        return Column(
+          children: [
+            // 材质下拉选择
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const Text("材质："),
+                DropdownMenu<GlMaterial>(
+                  initialSelection: _currentMaterial,
+                  onSelected: (GlMaterial? newValue) {
+                    setState(() {
+                      _currentMaterial = newValue!;
+                    });
+                  },
+                  dropdownMenuEntries: GlMaterial.values
+                      .map<DropdownMenuEntry<GlMaterial>>((GlMaterial value) {
+                    return DropdownMenuEntry<GlMaterial>(
+                      value: value,
+                      label: value.toString().split('.').last,
+                    );
+                  }).toList(),
+                ),
+              ],
+            )
+          ],
+        );
       // 游戏模式
-      case Mode.game:
+      case ControlMode.game:
         return Column(
           children: [
             // 速度显示
@@ -994,11 +1013,8 @@ void main(void)
   // ***************************************************************
   // OpenGL：光照与
   // ***************************************************************
-  // 银色材质
-  List<double> silverAmbient = [0.1923, 0.1923, 0.1923, 1.0];
-  List<double> silverDiffuse = [0.5075, 0.5075, 0.5075, 1.0];
-  List<double> silverSpecular = [0.5083, 0.5083, 0.5083, 1.0];
-  double silverShininess = 51.2;
+  // 当前选择的材质
+  GlMaterial _currentMaterial = GlMaterial.gold;
   // ADS 光照：环境光、漫反射、镜面反射
   List<double> globalAmbient = [0.7, 0.7, 0.7, 1.0];
   List<double> lightAmbient = [0.0, 0.0, 0.0, 1.0];
@@ -1007,6 +1023,9 @@ void main(void)
   vm.Vector3 lightPos = vm.Vector3(5.0, 2.0, 2.0);
   installLights() {
     final gl = flutterGlPlugin.gl;
+    gl.useProgram(sceneProgram);
+
+    // 光照
     var transformed = vMat.transform3(vm.Vector3.copy(lightPos));
 
     final globalAmbLoc = gl.getUniformLocation(sceneProgram, "globalAmbient");
@@ -1014,22 +1033,51 @@ void main(void)
     final diffLoc = gl.getUniformLocation(sceneProgram, "light.diffuse");
     final specLoc = gl.getUniformLocation(sceneProgram, "light.specular");
     final posLoc = gl.getUniformLocation(sceneProgram, "light.position");
-    final mambLoc = gl.getUniformLocation(sceneProgram, "material.ambient");
-    final mdiffLoc = gl.getUniformLocation(sceneProgram, "material.diffuse");
-    final mspecLoc = gl.getUniformLocation(sceneProgram, "material.specular");
-    final mshinyLoc = gl.getUniformLocation(sceneProgram, "material.shininess");
-
-    gl.useProgram(sceneProgram);
-
     gl.uniform4fv(globalAmbLoc, NativeFloat32Array.from(globalAmbient));
     gl.uniform4fv(ambLoc, NativeFloat32Array.from(lightAmbient));
     gl.uniform4fv(diffLoc, NativeFloat32Array.from(lightDiffuse));
     gl.uniform4fv(specLoc, NativeFloat32Array.from(lightSpecular));
     gl.uniform3fv(posLoc, transformed.storage);
-    gl.uniform4fv(mambLoc, NativeFloat32Array.from(silverAmbient));
-    gl.uniform4fv(mdiffLoc, NativeFloat32Array.from(silverDiffuse));
-    gl.uniform4fv(mspecLoc, NativeFloat32Array.from(silverSpecular));
-    gl.uniform1f(mshinyLoc, silverShininess);
+
+    //材质
+
+    final mambLoc = gl.getUniformLocation(sceneProgram, "material.ambient");
+    final mdiffLoc = gl.getUniformLocation(sceneProgram, "material.diffuse");
+    final mspecLoc = gl.getUniformLocation(sceneProgram, "material.specular");
+    final mshinyLoc = gl.getUniformLocation(sceneProgram, "material.shininess");
+
+    switch (_currentMaterial) {
+      case GlMaterial.gold:
+        gl.uniform4fv(mambLoc, NativeFloat32Array.from(goldAmbient));
+        gl.uniform4fv(mdiffLoc, NativeFloat32Array.from(goldDiffuse));
+        gl.uniform4fv(mspecLoc, NativeFloat32Array.from(goldSpecular));
+        gl.uniform1f(mshinyLoc, goldShininess);
+        break;
+      case GlMaterial.silver:
+        gl.uniform4fv(mambLoc, NativeFloat32Array.from(silverAmbient));
+        gl.uniform4fv(mdiffLoc, NativeFloat32Array.from(silverDiffuse));
+        gl.uniform4fv(mspecLoc, NativeFloat32Array.from(silverSpecular));
+        gl.uniform1f(mshinyLoc, silverShininess);
+        break;
+      case GlMaterial.bronze:
+        gl.uniform4fv(mambLoc, NativeFloat32Array.from(bronzeAmbient));
+        gl.uniform4fv(mdiffLoc, NativeFloat32Array.from(bronzeDiffuse));
+        gl.uniform4fv(mspecLoc, NativeFloat32Array.from(bronzeSpecular));
+        gl.uniform1f(mshinyLoc, bronzeShininess);
+        break;
+      case GlMaterial.jade:
+        gl.uniform4fv(mambLoc, NativeFloat32Array.from(jadeAmbient));
+        gl.uniform4fv(mdiffLoc, NativeFloat32Array.from(jadeDiffuse));
+        gl.uniform4fv(mspecLoc, NativeFloat32Array.from(jadeSpecular));
+        gl.uniform1f(mshinyLoc, jadeShininess);
+        break;
+      case GlMaterial.pearl:
+        gl.uniform4fv(mambLoc, NativeFloat32Array.from(pearlAmbient));
+        gl.uniform4fv(mdiffLoc, NativeFloat32Array.from(pearlDiffuse));
+        gl.uniform4fv(mspecLoc, NativeFloat32Array.from(pearlSpecular));
+        gl.uniform1f(mshinyLoc, pearlShininess);
+        break;
+    }
   }
 
   // ***************************************************************

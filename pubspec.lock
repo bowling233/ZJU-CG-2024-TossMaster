@@ -241,10 +241,10 @@ packages:
     dependency: "direct dev"
     description:
       name: flutter_lints
-      sha256: "3f41d009ba7172d5ff9be5f6e6e6abb4300e263aab8866d2a0842ed2a70f8f0c"
+      sha256: "5398f14efa795ffb7a33e9b6a08798b26a180edac4ad7db3f231e40f82ce11e1"
       url: "https://pub.flutter-io.cn"
     source: hosted
-    version: "4.0.0"
+    version: "5.0.0"
   flutter_plugin_android_lifecycle:
     dependency: transitive
     description:
@@ -307,10 +307,10 @@ packages:
     dependency: transitive
     description:
       name: image_picker_android
-      sha256: fa8141602fde3f7e2f81dbf043613eb44dfa325fa0bcf93c0f142c9f7a2c193e
+      sha256: aa6f1280b670861ac45220cc95adc59bb6ae130259d36f980ccb62220dc5e59f
       url: "https://pub.flutter-io.cn"
     source: hosted
-    version: "0.8.12+18"
+    version: "0.8.12+19"
   image_picker_for_web:
     dependency: transitive
     description:
@@ -387,10 +387,10 @@ packages:
     dependency: transitive
     description:
       name: lints
-      sha256: "976c774dd944a42e83e2467f4cc670daef7eed6295b10b36ae8c85bcbf828235"
+      sha256: "3315600f3fb3b135be672bf4a178c55f274bebe368325ae18462c89ac1e3b413"
       url: "https://pub.flutter-io.cn"
     source: hosted
-    version: "4.0.0"
+    version: "5.0.0"
   logging:
     dependency: transitive
     description:
@@ -612,6 +612,14 @@ packages:
     description: flutter
     source: sdk
     version: "0.0.99"
+  sleek_circular_slider:
+    dependency: "direct main"
+    description:
+      name: sleek_circular_slider
+      sha256: "8844d036269a13e60dda4e16534d30d27cacaff8d2f10d042d9d61d111468b13"
+      url: "https://pub.flutter-io.cn"
+    source: hosted
+    version: "2.0.1"
   source_span:
     dependency: transitive
     description:
