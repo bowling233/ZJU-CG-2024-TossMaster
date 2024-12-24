@@ -92,7 +92,7 @@ class _TossMasterState extends State<TossMaster> with WidgetsBindingObserver {
         backgroundColor: Theme.of(context).colorScheme.inversePrimary,
         title: const Text('TossMaster - ZJU CG 2024'),
       ),
-      body: Center(
+      body: SingleChildScrollView(
         child: Column(
             mainAxisAlignment: MainAxisAlignment.start,
             children: <Widget>[
@@ -109,7 +109,6 @@ class _TossMasterState extends State<TossMaster> with WidgetsBindingObserver {
                     _selectedModelInstanceIndex = null;
                     return;
                   }
-
                   // 重置选中结果
                   _selectedModelIndex = _selectedModelInstanceIndex = null;
                   tMin = double.infinity;
@@ -189,9 +188,6 @@ class _TossMasterState extends State<TossMaster> with WidgetsBindingObserver {
               //                 "selectedModelIndex: $_selectedModelIndex, selectedModelInstanceIndex: $_selectedModelInstanceIndex")
               //           ])
               //         : Container()),
-              // 模式控制面板
-              _modeWidget,
-              const Spacer(),
               // 模式切换
               SegmentedButton<Mode>(
                 segments: const <ButtonSegment<Mode>>[
@@ -222,7 +218,9 @@ class _TossMasterState extends State<TossMaster> with WidgetsBindingObserver {
                     _mode = newSelection.first;
                   });
                 },
-              )
+              ),
+              // 模式控制面板
+              _modeControlWidget,
             ]),
       ),
     );
@@ -264,13 +262,11 @@ class _TossMasterState extends State<TossMaster> with WidgetsBindingObserver {
     if (_timers.isNotEmpty) _timers.removeFirst().cancel();
   }
 
-  Widget get _modeWidget {
+  Widget get _modeControlWidget {
     switch (_mode) {
       // 相机编辑模式：串流、三轴位移和旋转
       case Mode.editCamera:
-        return Scrollbar(
-            child: SingleChildScrollView(
-                child: Column(children: <Widget>[
+        return Column(children: <Widget>[
           Row(mainAxisAlignment: MainAxisAlignment.center, children: [
             // 串流控制
             ElevatedButton.icon(
@@ -507,7 +503,7 @@ class _TossMasterState extends State<TossMaster> with WidgetsBindingObserver {
               },
             ),
           ]),
-        ])));
+        ]);
       // 场景编辑模式
       case Mode.editScene:
         return Column(children: <Widget>[

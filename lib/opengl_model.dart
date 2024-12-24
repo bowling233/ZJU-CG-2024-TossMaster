@@ -169,41 +169,35 @@ class ImportedModel {
         (yVals.last - yVals.first) / 2, (zVals.last - zVals.first) / 2);
 
     // 包围盒的顶点数据，按 GL_LINES 绘制
-    List<double> points = [
-      xVals.first,
-      yVals.first,
-      zVals.first,
-      xVals.last,
-      yVals.first,
-      zVals.first,
-      xVals.first,
-      yVals.last,
-      zVals.first,
-      xVals.last,
-      yVals.last,
-      zVals.first,
-      xVals.first,
-      yVals.first,
-      zVals.last,
-      xVals.last,
-      yVals.first,
-      zVals.last,
-      xVals.first,
-      yVals.last,
-      zVals.last,
-      xVals.last,
-      yVals.last,
-      zVals.last,
-    ];
+    // 共 12 条边，每条边 2 个顶点，每个顶点 3 个坐标
+    List<double> boxVerts = [];
+    for(var i = 0; i < 8; i++) {
+      boxVerts.add(i & 1 == 0 ? xVals.first : xVals.last);
+      boxVerts.add(i & 2 == 0 ? yVals.first : yVals.last);
+      boxVerts.add(i & 4 == 0 ? zVals.first : zVals.last);
+    }
+
+    final boxVao = gl.createVertexArray();
+    gl.bindVertexArray(boxVao);
+
+    final boxVbo = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, boxVbo);
+    gl.bufferData(
+        gl.ARRAY_BUFFER,
+        boxVerts.length * Float32List.bytesPerElement,
+        Float32List.fromList(boxVerts),
+        gl.STATIC_DRAW);
+    gl.vertexAttribPointer(0, 3, gl.FLOAT, false, 0, 0);
+    gl.enableVertexAttribArray(0);
 
     // move2origin
 
     return ImportedModel._internal(numVertices, vao, vbo, texture,
-        triangleVerts, texPath, gifPath, halfSize);
+        triangleVerts, texPath, gifPath, halfSize, boxVao, boxVbo);
   }
 
   ImportedModel._internal(this.numVertices, this.vao, this.vbo, this.texture,
-      this.vertices, this.texPath, this.gifPath, this.halfSize);
+      this.vertices, this.texPath, this.gifPath, this.halfSize, this.boxVao, this.boxVbo);
 
   void instantiate() {
     instancePosition.add(Vector3(0, 0, 0));
@@ -242,6 +236,33 @@ class ImportedModel {
     // 实例化绘制
     gl.drawArraysInstanced(
         gl.TRIANGLES, 0, numVertices, instancePosition.length);
+  }
+
+  // 渲染包围盒
+  void renderBox(gl) {
+    if (instancePosition.isEmpty) return;
+    // 包围盒数据
+    gl.bindVertexArray(boxVao);
+    gl.bindBuffer(gl.ARRAY_BUFFER, boxVbo);
+    // 实例数据
+    List<double> mMatrix = [];
+    for (var i = 0; i < instancePosition.length; i++) {
+      var modelMatrix = Matrix4.compose(instancePosition[i],
+          instanceRotation[i], Vector3.all(instanceScale[i]));
+      mMatrix.addAll(modelMatrix.storage);
+    }
+    gl.bindBuffer(gl.ARRAY_BUFFER, vbo[3]);
+    gl.bufferData(gl.ARRAY_BUFFER, mMatrix.length * Float32List.bytesPerElement,
+        Float32List.fromList(mMatrix), gl.STATIC_DRAW);
+    List<int> boxFlag = List.filled(instanceFlag.length, 1);
+    gl.bindBuffer(gl.ARRAY_BUFFER, vbo[4]);
+    gl.bufferData(
+        gl.ARRAY_BUFFER,
+        boxFlag.length * Int32List.bytesPerElement,
+        Int32List.fromList(boxFlag),
+        gl.STATIC_DRAW);
+    // 实例化绘制
+    gl.drawArraysInstanced(gl.LINES, 0, 8, instancePosition.length);
   }
 
   // 实例选择
