@@ -15,6 +15,8 @@ import 'package:camera/camera.dart';
 import 'package:vector_math/vector_math.dart' as vm;
 import 'package:file_picker/file_picker.dart';
 import 'package:sensors_plus/sensors_plus.dart';
+// import 'package:sleek_circular_slider/sleek_circular_slider.dart';
+import 'package:syncfusion_flutter_gauges/gauges.dart';
 
 import 'opengl_utils.dart';
 import 'opengl_model.dart';
@@ -73,7 +75,7 @@ class _TossMasterState extends State<TossMaster> with WidgetsBindingObserver {
   // ***************************************************************
   // UI
   // ***************************************************************
-  ControlMode _mode = ControlMode.editCamera;
+  ControlMode _controlMode = ControlMode.editCamera;
   // imglib.Image? testData;
   int? _selectedModelIndex, _selectedModelInstanceIndex;
   double tMin = double.infinity;
@@ -206,10 +208,10 @@ class _TossMasterState extends State<TossMaster> with WidgetsBindingObserver {
                     icon: Icon(Icons.gamepad),
                   ),
                 ],
-                selected: <ControlMode>{_mode},
+                selected: <ControlMode>{_controlMode},
                 onSelectionChanged: (Set<ControlMode> newSelection) {
                   setState(() {
-                    _mode = newSelection.first;
+                    _controlMode = newSelection.first;
                   });
                 },
               ),
@@ -221,12 +223,31 @@ class _TossMasterState extends State<TossMaster> with WidgetsBindingObserver {
   }
 
   importModel(gl) async {
-    late String objPath, texPath;
-    String? gifPath;
-
+    late String objPath;
+    String? gifPath, texPath;
+    await showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Text('导入模型'),
+          content: const Text(
+              '请依次选择 obj、tex 和 gif 文件。如果没有 tex 或 gif 文件，请留空（即不选择文件，直接返回）。'),
+          actions: <Widget>[
+            TextButton(
+              child: const Text('开始选择文件'),
+              onPressed: () {
+                Navigator.of(context).pop();
+              },
+            ),
+          ],
+        );
+      },
+    );
     FilePickerResult? result = await FilePicker.platform.pickFiles();
     if (result != null) {
       objPath = result.files.single.path!;
+    } else {
+      return;
     }
 
     result = await FilePicker.platform.pickFiles();
@@ -239,7 +260,7 @@ class _TossMasterState extends State<TossMaster> with WidgetsBindingObserver {
       gifPath = result.files.single.path!;
     }
 
-    _models.add(ImportedModel(gl, objPath, texPath, gifPath: gifPath));
+    _models.add(ImportedModel(gl, objPath, texPath, gifPath));
     setState(() {});
   }
 
@@ -257,7 +278,7 @@ class _TossMasterState extends State<TossMaster> with WidgetsBindingObserver {
   }
 
   Widget get _modeControlWidget {
-    switch (_mode) {
+    switch (_controlMode) {
       // 相机编辑模式：串流、三轴位移和旋转
       case ControlMode.editCamera:
         return Column(children: <Widget>[
@@ -548,7 +569,16 @@ class _TossMasterState extends State<TossMaster> with WidgetsBindingObserver {
                             ? const EdgeInsets.all(8.0)
                             : null,
                         child: _models[index].gifPath == null
-                            ? Image.file(File(_models[index].texPath))
+                            ? (_models[index].texPath == null
+                                ? Container(
+                                    width: 150,
+                                    height: 150,
+                                    color: Colors.grey,
+                                    child: const Center(
+                                      child: Text('No Image'),
+                                    ),
+                                  )
+                                : Image.file(File(_models[index].texPath!)))
                             : Image.file(File(_models[index].gifPath!)),
                       ),
                     ),
@@ -560,28 +590,212 @@ class _TossMasterState extends State<TossMaster> with WidgetsBindingObserver {
       case ControlMode.editLight:
         return Column(
           children: [
-            // 材质下拉选择
+            Text("定向光照"),
+            // 定向光源位置
+            Row(
+              children: [
+                SizedBox(
+                  width: MediaQuery.of(context).size.width / 3,
+                  height: MediaQuery.of(context).size.width / 3,
+                  child: SfRadialGauge(
+                    axes: <RadialAxis>[
+                      RadialAxis(
+                        minimum: 0,
+                        maximum: 360,
+                        startAngle: 0,
+                        endAngle: 360,
+                        showLabels: false,
+                        showTicks: false,
+                        pointers: <GaugePointer>[
+                          MarkerPointer(
+                            value: (atan2(lightPos.y, lightPos.x) * 180 / pi) %
+                                360,
+                            enableDragging: true,
+                            markerHeight: 20,
+                            markerWidth: 20,
+                            markerType: MarkerType.circle,
+                            color: Colors.red,
+                            onValueChanged: (value) {
+                              setState(() {
+                                double radians = value * pi / 180;
+                                lightPos.x = cos(radians) * lightPos.length;
+                                lightPos.y = sin(radians) * lightPos.length;
+                              });
+                            },
+                          ),
+                        ],
+                        annotations: [
+                          GaugeAnnotation(
+                            widget: Text("位置"),
+                            // angle: 90,
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+                // 光源纵向旋转
+                SizedBox(
+                  width: MediaQuery.of(context).size.width / 3,
+                  height: MediaQuery.of(context).size.width / 3,
+                  child: SfRadialGauge(
+                    axes: <RadialAxis>[
+                      RadialAxis(
+                        minimum: -90,
+                        maximum: 90,
+                        startAngle: 0,
+                        endAngle: 360,
+                        showLabels: false,
+                        showTicks: false,
+                        pointers: <GaugePointer>[
+                          MarkerPointer(
+                            value:
+                                (asin(lightPos.z / lightPos.length) * 180 / pi),
+                            enableDragging: true,
+                            markerHeight: 20,
+                            markerWidth: 20,
+                            markerType: MarkerType.circle,
+                            color: Colors.blue,
+                            onValueChanged: (value) {
+                              setState(() {
+                                double radians = value * pi / 180;
+                                lightPos.z = sin(radians) * lightPos.length;
+                                double xyLength =
+                                    cos(radians) * lightPos.length;
+                                lightPos.x =
+                                    cos(atan2(lightPos.y, lightPos.x)) *
+                                        xyLength;
+                                lightPos.y =
+                                    sin(atan2(lightPos.y, lightPos.x)) *
+                                        xyLength;
+                              });
+                            },
+                          ),
+                        ],
+                        annotations: [
+                          GaugeAnnotation(
+                            widget: Text("高度"),
+                            angle: 90,
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+                // 光照颜色
+                SizedBox(
+                  width: MediaQuery.of(context).size.width / 3,
+                  height: MediaQuery.of(context).size.width / 3,
+                  child: SfRadialGauge(
+                    axes: <RadialAxis>[
+                      RadialAxis(
+                        minimum: 0,
+                        maximum: 1,
+                        startAngle: 0,
+                        endAngle: 360,
+                        showLabels: true,
+                        showTicks: false,
+                        pointers: <GaugePointer>[
+                          MarkerPointer(
+                            value: lightColor.red / 255,
+                            enableDragging: true,
+                            markerHeight: 20,
+                            markerWidth: 20,
+                            markerType: MarkerType.circle,
+                            color: Colors.red,
+                            onValueChanged: (value) {
+                              setState(() {
+                                lightColor = Color.fromARGB(
+                                    255,
+                                    (value * 255).toInt(),
+                                    lightColor.green,
+                                    lightColor.blue);
+                              });
+                            },
+                          ),
+                          MarkerPointer(
+                            value: lightColor.green / 255,
+                            enableDragging: true,
+                            markerHeight: 20,
+                            markerWidth: 20,
+                            markerType: MarkerType.circle,
+                            color: Colors.green,
+                            onValueChanged: (value) {
+                              setState(() {
+                                lightColor = Color.fromARGB(255, lightColor.red,
+                                    (value * 255).toInt(), lightColor.blue);
+                              });
+                            },
+                          ),
+                          MarkerPointer(
+                            value: lightColor.blue / 255,
+                            enableDragging: true,
+                            markerHeight: 20,
+                            markerWidth: 20,
+                            markerType: MarkerType.circle,
+                            color: Colors.blue,
+                            onValueChanged: (value) {
+                              setState(() {
+                                lightColor = Color.fromARGB(255, lightColor.red,
+                                    lightColor.green, (value * 255).toInt());
+                              });
+                            },
+                          ),
+                          RangePointer(
+                            value: lightColor.red / 255,
+                            color: Colors.red.withOpacity(0.5),
+                          ),
+                          RangePointer(
+                            value: lightColor.green / 255,
+                            color: Colors.green.withOpacity(0.5),
+                          ),
+                          RangePointer(
+                            value: lightColor.blue / 255,
+                            color: Colors.blue.withOpacity(0.5),
+                          ),
+                        ],
+                        annotations: [
+                          GaugeAnnotation(
+                            widget: Text("颜色"),
+                            angle: 90,
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            // 环境光照强度
             Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                const Text("材质："),
-                DropdownMenu<GlMaterial>(
-                  initialSelection: _currentMaterial,
-                  onSelected: (GlMaterial? newValue) {
+                const Text("环境光照强度："),
+                Slider(
+                  value: globalAmbientStrength,
+                  onChanged: (value) {
                     setState(() {
-                      _currentMaterial = newValue!;
+                      globalAmbientStrength = value;
                     });
                   },
-                  dropdownMenuEntries: GlMaterial.values
-                      .map<DropdownMenuEntry<GlMaterial>>((GlMaterial value) {
-                    return DropdownMenuEntry<GlMaterial>(
-                      value: value,
-                      label: value.toString().split('.').last,
-                    );
-                  }).toList(),
+                  min: 0.0,
+                  max: 1.0,
                 ),
               ],
-            )
+            ),
+            // 材质下拉选择
+            DropdownMenu<GlMaterialLabel>(
+              //initialSelection: _currentMaterial,
+              initialSelection: GlMaterialLabel.values[_currentMaterial.index],
+              label: const Text("材质"),
+              requestFocusOnTap: true,
+              onSelected: (GlMaterialLabel? newValue) {
+                setState(() {
+                  _currentMaterial = GlMaterial.values[newValue!.index];
+                });
+              },
+              dropdownMenuEntries: GlMaterialLabel.entries,
+            ),
           ],
         );
       // 游戏模式
@@ -1007,7 +1221,7 @@ void main(void)
       model.render(gl);
     }
 
-    _sphere.render(gl);
+    if (_controlMode == ControlMode.game) _sphere.render(gl);
   }
 
   // ***************************************************************
@@ -1016,15 +1230,46 @@ void main(void)
   // 当前选择的材质
   GlMaterial _currentMaterial = GlMaterial.gold;
   // ADS 光照：环境光、漫反射、镜面反射
-  List<double> globalAmbient = [0.7, 0.7, 0.7, 1.0];
-  List<double> lightAmbient = [0.0, 0.0, 0.0, 1.0];
-  List<double> lightDiffuse = [1.0, 1.0, 1.0, 1.0];
-  List<double> lightSpecular = [1.0, 1.0, 1.0, 1.0];
+  // 环境光
+  Color globalColor = Colors.white;
+  double globalAmbientStrength = 0.7;
+  // 定向光
+  Color lightColor = Colors.white;
+  double lightAmbientStrength = 0.0;
+  double lightDiffuseStrength = 1.0;
+  double lightSpecularStrength = 1.0;
   vm.Vector3 lightPos = vm.Vector3(5.0, 2.0, 2.0);
   installLights() {
     final gl = flutterGlPlugin.gl;
     gl.useProgram(sceneProgram);
-
+    // List<double> globalAmbient = [0.7, 0.7, 0.7, 1.0];
+    // List<double> lightAmbient = [0.0, 0.0, 0.0, 1.0];
+    // List<double> lightDiffuse = [1.0, 1.0, 1.0, 1.0];
+    // List<double> lightSpecular = [1.0, 1.0, 1.0, 1.0];
+    List<double> globalAmbient = [
+      globalColor.red / 255 * globalAmbientStrength,
+      globalColor.green / 255 * globalAmbientStrength,
+      globalColor.blue / 255 * globalAmbientStrength,
+      1.0
+    ];
+    List<double> lightAmbient = [
+      lightColor.red / 255 * lightAmbientStrength,
+      lightColor.green / 255 * lightAmbientStrength,
+      lightColor.blue / 255 * lightAmbientStrength,
+      1.0
+    ];
+    List<double> lightDiffuse = [
+      lightColor.red / 255 * lightDiffuseStrength,
+      lightColor.green / 255 * lightDiffuseStrength,
+      lightColor.blue / 255 * lightDiffuseStrength,
+      1.0
+    ];
+    List<double> lightSpecular = [
+      lightColor.red / 255 * lightSpecularStrength,
+      lightColor.green / 255 * lightSpecularStrength,
+      lightColor.blue / 255 * lightSpecularStrength,
+      1.0
+    ];
     // 光照
     var transformed = vMat.transform3(vm.Vector3.copy(lightPos));
 

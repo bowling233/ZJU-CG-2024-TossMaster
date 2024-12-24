@@ -1,4 +1,6 @@
+import 'dart:collection';
 import 'dart:developer' as developer;
+import 'package:flutter/material.dart';
 import 'package:image/image.dart' as imglib;
 import 'package:camera/camera.dart';
 import 'package:vector_math/vector_math.dart';
@@ -9,31 +11,64 @@ import 'package:vector_math/vector_math.dart';
 
 enum GlMaterial { gold, silver, bronze, jade, pearl }
 
+typedef GlMaterialEntry = DropdownMenuEntry<GlMaterialLabel>;
+
+enum GlMaterialLabel {
+  gold('Gold', goldAmbient),
+  silver('Silver', silverAmbient),
+  bronze('Bronze', bronzeAmbient),
+  jade('Jade', jadeAmbient),
+  pearl('Pearl', pearlAmbient);
+
+  const GlMaterialLabel(this.label, this.ambient);
+  final String label;
+  final List<double> ambient;
+
+  static final List<GlMaterialEntry> entries =
+      UnmodifiableListView<GlMaterialEntry>(
+    values.map<GlMaterialEntry>(
+      (GlMaterialLabel material) => GlMaterialEntry(
+        value: material,
+        label: material.label,
+        enabled: true,
+        style: MenuItemButton.styleFrom(
+          foregroundColor: Color.fromRGBO(
+            (material.ambient[0] * 255).toInt(),
+            (material.ambient[1] * 255).toInt(),
+            (material.ambient[2] * 255).toInt(),
+            material.ambient[3],
+          ),
+        ),
+      ),
+    ),
+  );
+}
+
 // 金材质
-List<double> goldAmbient = [0.2473, 0.1995, 0.0745, 1.0];
-List<double> goldDiffuse = [0.7516, 0.6065, 0.2265, 1.0];
-List<double> goldSpecular = [0.6283, 0.5559, 0.3661, 1.0];
-double goldShininess = 51.2;
+const List<double> goldAmbient = [0.2473, 0.1995, 0.0745, 1.0];
+const List<double> goldDiffuse = [0.7516, 0.6065, 0.2265, 1.0];
+const List<double> goldSpecular = [0.6283, 0.5559, 0.3661, 1.0];
+const double goldShininess = 51.2;
 // 银材质
-List<double> silverAmbient = [0.1923, 0.1923, 0.1923, 1.0];
-List<double> silverDiffuse = [0.5075, 0.5075, 0.5075, 1.0];
-List<double> silverSpecular = [0.5083, 0.5083, 0.5083, 1.0];
-double silverShininess = 51.2;
+const List<double> silverAmbient = [0.1923, 0.1923, 0.1923, 1.0];
+const List<double> silverDiffuse = [0.5075, 0.5075, 0.5075, 1.0];
+const List<double> silverSpecular = [0.5083, 0.5083, 0.5083, 1.0];
+const double silverShininess = 51.2;
 // 铜材质
-List<double> bronzeAmbient = [0.2125, 0.1275, 0.0540, 1.0];
-List<double> bronzeDiffuse = [0.7140, 0.4284, 0.1814, 1.0];
-List<double> bronzeSpecular = [0.3936, 0.2719, 0.1667, 1.0];
-double bronzeShininess = 25.6;
+const List<double> bronzeAmbient = [0.2125, 0.1275, 0.0540, 1.0];
+const List<double> bronzeDiffuse = [0.7140, 0.4284, 0.1814, 1.0];
+const List<double> bronzeSpecular = [0.3936, 0.2719, 0.1667, 1.0];
+const double bronzeShininess = 25.6;
 // 玉材质
-List<double> jadeAmbient = [0.1350, 0.2225, 0.1575, 0.95];
-List<double> jadeDiffuse = [0.54, 0.89, 0.63, 0.95];
-List<double> jadeSpecular = [0.3162, 0.3162, 0.3162, 0.95];
-double jadeShininess = 12.8;
+const List<double> jadeAmbient = [0.1350, 0.2225, 0.1575, 0.95];
+const List<double> jadeDiffuse = [0.54, 0.89, 0.63, 0.95];
+const List<double> jadeSpecular = [0.3162, 0.3162, 0.3162, 0.95];
+const double jadeShininess = 12.8;
 // 珍珠材质
-List<double> pearlAmbient = [0.25, 0.20725, 0.20725, 0.922];
-List<double> pearlDiffuse = [1.0, 0.829, 0.829, 0.922];
-List<double> pearlSpecular = [0.296648, 0.296648, 0.296648, 0.922];
-double pearlShininess = 11.264;
+const List<double> pearlAmbient = [0.25, 0.20725, 0.20725, 0.922];
+const List<double> pearlDiffuse = [1.0, 0.829, 0.829, 0.922];
+const List<double> pearlSpecular = [0.296648, 0.296648, 0.296648, 0.922];
+const double pearlShininess = 11.264;
 
 // *********************************
 // OpenGL 模型
