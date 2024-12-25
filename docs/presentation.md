@@ -19,27 +19,44 @@ TossMaster
 
 ## 1.1 核心玩法：投掷游戏
 
-蓄力 ➡️ 投掷 ➡️ 命中
+长按蓄力 ➡️ 投掷 ➡️ 命中
 
-TODO
-![](presentation.assets/1.1.gif)
-![bg right:50% contain](https://s.cafebazaar.ir/images/upload/screenshot/com.master.lucky.ring.toss-c28c5e38-ddbb-4628-9ae8-7392351a29a5.webp?x-img=v1/format,type_webp,lossless_false/resize,h_600,lossless_false/optimize)
-![bg right:50% contain](presentation.assets/video-lag.gif)
+物理运动，包括重力、碰撞检测
+
+![bg right:50% contain](presentation.assets/1.1.1.webp)
+![bg right:50% contain](presentation.assets/1.1.gif)
 
 ---
 
-## 1.2 项目亮点：AR 和移动端跨平台实现
+## 1.2 项目亮点：移动端跨平台实现
 
-- AR：场景中的物体能够跟随相机视角，营造出虚拟与现实共享同一空间的体验。
-- 移动端跨平台实现：借助 Flutter 框架，在 Android、HarmonyOS 和 iOS 上完成适配。
+<!-- _class: invert -->
+
+<style scoped>
+blockquote {
+  color: lightgray;
+  background: rgba(0, 0, 0, 0.5);
+}
+</style>
+
+借助先进的 Flutter 框架，在 Android、HarmonyOS 和 iOS 上完成适配。
+
+~~跨了，但没完全跨，还是得做适配。~~
 
 > 本项目构思时的目标就是高级要求中的两条内容：
 >
 > - （8 分）不依赖现有引擎，采用 iOS/Android 平台实现。
 > - （7 分）与增强现实应用结合。
 
-TODO：
-![](presentation.assets/1.2.png)
+![bg opacity:.7](presentation.assets/1.2.jpg)
+
+---
+
+## 1.2 项目亮点：AR
+
+![bg right:40% contain](presentation.assets/1.2.gif)
+
+场景中的物体能够跟随相机视角，营造出虚拟与现实共享同一空间的体验。
 
 ---
 
@@ -48,10 +65,19 @@ TODO：
 - 用户导入模型，存储在模型库中。
 - 导入模型同时可以选择导入纹理和展示用的 GIF。
 - 用户选择模型库中的模型，将其放置在场景中。
+- 好处：**实例化渲染**，一个 OpenGL 调用渲染多个实例，节约了移动端的内存带宽。
+
+![bg right:40% contain](presentation.assets/1.3.gif)
 
 ---
 
 ## 1.4 基本要求：几何变换
+
+<style scoped>
+blockquote {
+ font-size: 20px;
+}
+</style>
 
 用户与画面交互以控制模型：
 
@@ -60,28 +86,35 @@ TODO：
 - 双指缩放
 - 双指旋转
 
-![bg right:40% contain](presentation.assets/video-nolag.gif)
+![height:300](presentation.assets/1.4.jpeg)
+
+
+![bg right:40% contain](presentation.assets/1.4.gif)
 
 ---
 
 ## 1.5 基本要求：Blinn-Phong 着色的 ADS 光照模型及材质
 
-- Blinn-Phong 着色在 Phong 的基础上节省了大量性能损耗，适合移动端渲染。
+- Blinn-Phong 着色在 Phong 的基础上节省了大量性能损耗，对移动端意义重大。
 - 两个光源，用户可控：
   - 全局光：没有方向，仅有 A（环境光）分量，对每个像素具有相同的光照。
   - 定向光（远距离光）：具有方向和 A（环境光）、D（漫反射光）、S（镜面光）三个反射分量。
 - 材质：ADS + 光泽，预置金、银、铜、玉、珍珠材质。
 
-![bg right:40% contain](presentation.assets/video-lag.gif)
-![bg right:40% contain](presentation.assets/video-lag.gif)
+![bg right:40% contain](presentation.assets/1.5.gif)
 
 ---
 
-## 1.6 基本要求：
+## 1.6 游戏循环
 
----
+<style>
+img[alt~="center"] {
+  display: block;
+  margin: 0 auto;
+}
+</style>
 
-## 1.7 高级要求：
+![height:500px center](presentation.assets/1.7.jpg)
 
 ---
 
@@ -108,11 +141,11 @@ TODO：
 
 ---
 
-## 2.1 缺少基础设施的 Flutter
+## 2.1 缺少基础设施的移动端
 
 ![bg right:45% contain](presentation.assets/flutter_no_infra.png)
 
-极少有人在跨平台框架中直接使用 OpenGL 这类底层库进行开发。
+极少有人在如 Flutter 等跨平台框架中直接使用 OpenGL 这类底层库进行开发。
 
 <style scoped>
 table {
@@ -135,6 +168,7 @@ blockquote {
 
 ### `wasabia/flutter_gl` 的绘制方式
 
+- 在安卓端需要修一下依赖，适配到 NDK 34 以上。
 - 在 Dart 中离屏渲染到 FrameBuffer
 - 将 FBO 的颜色纹理附件传递给 Native Texture Widget
 
@@ -189,6 +223,7 @@ for (int h = 0; h < imageHeight; h++) {
 
 ## 2.3 Dart 是一门函数式语言
 
+Dart 是一款由 Google 开发的函数式编程语言，你将在 Flutter 框架中探索无状态和数据的不可变性......
 
 ![bg right:40% contain](presentation.assets/video-lag.gif)
 
@@ -251,18 +286,12 @@ S0059: 'binding' qualifier is not allowed in language version 300 es
 S0032: no default precision defined for variable 'varyingNormal'
 ```
 
-![](presentation.assets/glsl_default_precision.png)
+![height:300px](presentation.assets/Untitled.png)
 
 - 着色器中必须指定默认精度，为 Float16。
 - 帧缓冲区爆内存：善用 `glClear`、`glInvalidateFramebuffer`。
 
 ![bg right:30% contain](presentation.assets/2.6.png)
-
----
-
-## 2.7 Awesome 指数
-
-
 
 ---
 
@@ -273,314 +302,3 @@ S0032: no default precision defined for variable 'varyingNormal'
 ###### 浙江大学 2024 学年秋冬学期《计算机图形学》课程项目展示
 
 ###### by 朱宝林 杨琳玥
-
----
-
-# Features
-
-- :memo: **Write slide deck with plain Markdown** (CommonMark)
-- :factory: Built on [Marpit framework][marpit]: A brand-new skinny framework for creating slide deck
-- :gear: [Marp Core][marp-core]: Easy to start using the core engine and built-in themes via npm
-- :tv: [Marp CLI][marp-cli]: Convert Markdown into HTML, PDF, PPTX, and images
-- :vs: [Marp for VS Code][marp-vscode]: Live-preview your deck while editting
-- and more...
-
----
-
-# How to write slides?
-
-Split pages by horizontal ruler (e.g. `---`). It's very simple.
-
-```markdown
-# Slide 1
-
-foobar
-
----
-
-# Slide 2
-
-foobar
-```
-
----
-
-# Directives
-
-Marp has extended syntax called **"Directives"** to support creating beautiful slides.
-
-Insert front-matter to the top of Markdown:
-
-```
----
-theme: default
----
-```
-
-or HTML comment to anywhere:
-
-```html
-<!-- theme: default -->
-```
-
-<https://marpit.marp.app/directives>
-
----
-
-## [Global directives](https://marpit.marp.app/directives?id=global-directives)
-
-- `theme`: Choose theme
-- `size`: Choose slide size from `16:9` and `4:3` *(except Marpit framework)*
-- [`headingDivider`](https://marpit.marp.app/directives?id=heading-divider): Instruct to divide slide pages at before of specified heading levels
-
-```
----
-theme: gaia
-size: 4:3
----
-
-# Content
-```
-
-> Marp can use [built-in themes in Marp Core](https://github.com/marp-team/marp-core/tree/master/themes#readme): `default`, `gaia`, and `uncover`.
-
----
-
-## [Local directives](https://marpit.marp.app/directives?id=local-directives)
-
-These are the setting value per slide pages.
-
-- `paginate`: Show pagination by set `true`
-- `header`: Specify the contents for header
-- `footer`: Specify the contents for footer
-- `class`: Set HTML class for current slide
-- `color`: Set text color
-- `backgroundColor`: Set background color
-
----
-
-### Spot directives
-
-Local directives would apply to **defined page and following pages**.
-
-They can apply to single page by using underscore prefix such as `_class`.
-
-![bg right 95%](https://marpit.marp.app/assets/directives.png)
-
----
-
-### Example
-
-This page is using invert color scheme [defined in Marp built-in theme](https://github.com/marp-team/marp-core/tree/master/themes#readme).
-
-<!-- _class: invert -->
-
-```html
-<!-- _class: invert -->
-```
-
----
-
-# [Image syntax](https://marpit.marp.app/image-syntax)
-
-You can resize image size and apply filters through keywords: `width` (`w`), `height` (`h`), and filter CSS keywords.
-
-```markdown
-![width:100px height:100px](image.png)
-```
-
-```markdown
-![blur sepia:50%](filters.png)
-```
-
-Please refer [resizing image syntax](https://marpit.marp.app/image-syntax?id=resizing-image) and [a list of CSS filters](https://marpit.marp.app/image-syntax?id=image-filters).
-
-![w:100px h:100px](https://avatars1.githubusercontent.com/u/20685754?v=4) ![w:100 h:100 blur sepia:50%](https://avatars1.githubusercontent.com/u/20685754?v=4)
-
----
-
-# [Background image](https://marpit.marp.app/image-syntax?id=slide-backgrounds)
-
-You can set background image for a slide by using `bg` keyword.
-
-```markdown
-![bg opacity](https://yhatt-marp-cli-example.netlify.com/assets/gradient.jpg)
-```
-
-![bg opacity](https://yhatt-marp-cli-example.netlify.com/assets/gradient.jpg)
-
----
-
-## Multiple backgrounds ([Marpit's advanced backgrounds](https://marpit.marp.app/image-syntax?id=advanced-backgrounds))
-
-Marp can use multiple background images.
-
-```markdown
-![bg blur:3px](https://fakeimg.pl/800x600/fff/ccc/?text=A)
-![bg blur:3px](https://fakeimg.pl/800x600/eee/ccc/?text=B)
-![bg blur:3px](https://fakeimg.pl/800x600/ddd/ccc/?text=C)
-```
-
-Also can change alignment direction by including `vertical` keyword.
-
-![bg blur:3px](https://fakeimg.pl/800x600/fff/ccc/?text=A)
-![bg blur:3px](https://fakeimg.pl/800x600/eee/ccc/?text=B)
-![bg blur:3px](https://fakeimg.pl/800x600/ddd/ccc/?text=C)
-
----
-
-## [Split background](https://marpit.marp.app/image-syntax?id=split-backgrounds)
-
-Marp can use [Deckset](https://docs.deckset.com/English.lproj/Media/01-background-images.html#split-slides) style split background(s).
-
-Make a space for background by `bg` + `left` / `right` keywords.
-
-```markdown
-![bg right](image.jpg)
-```
-
-![bg right](https://images.unsplash.com/photo-1568488789544-e37edf90eb67?crop=entropy&cs=tinysrgb&fit=crop&fm=jpg&h=720&ixlib=rb-1.2.1&q=80&w=640)
-
-<!-- _footer: "*Photo by [Mohamed Nohassi](https://unsplash.com/@coopery?utm_source=unsplash&utm_medium=referral&utm_content=creditCopyText) on [Unsplash](https://unsplash.com/?utm_source=unsplash&utm_medium=referral&utm_content=creditCopyText)*" -->
-
----
-
-## [Fragmented list](https://marpit.marp.app/fragmented-list)
-
-Marp will parse a list with asterisk marker as the fragmented list for appearing contents one by one. (***Only for exported HTML** by [Marp CLI][marp-cli] / [Marp for VS Code][marp-vscode]*)
-
-```markdown
-# Bullet list
-
-- One
-- Two
-- Three
-
----
-
-# Fragmented list
-
-* One
-* Two
-* Three
-```
-
----
-
-## Math typesetting (only for [Marp Core][marp-core])
-
-[KaTeX](https://katex.org/) math typesetting such as $ax^2+bc+c$ can use with [Pandoc's math syntax](https://pandoc.org/MANUAL.html#math).
-
-$$I_{xx}=\int\int_Ry^2f(x,y)\cdot{}dydx$$
-
-```tex
-$ax^2+bc+c$
-```
-
-```tex
-$$I_{xx}=\int\int_Ry^2f(x,y)\cdot{}dydx$$
-```
-
----
-
-## Auto-scaling (only for [Marp Core][marp-core])
-
-*Several built-in themes* are supported auto-scaling for code blocks and math typesettings.
-
-```text
-Too long code block will be scaled-down automatically. ------------>
-```
-
-```text
-Too long code block will be scaled-down automatically. ------------------------>
-```
-
-```text
-Too long code block will be scaled-down automatically. ------------------------------------------------>
-```
-
----
-
-##### <!--fit--> Auto-fitting header (only for [Marp Core][marp-core])
-
-##### <!--fit--> is available by annotating `<!--fit-->` in headings
-
-<br />
-
-```html
-## <!--fit--> Auto-fitting header (only for Marp Core)
-```
-
----
-
-## [Theme CSS](https://marpit.marp.app/theme-css)
-
-Marp uses `<section>` as the container of each slide. And others are same as styling for plain Markdown. The customized theme can use in [Marp CLI][marp-cli] and [Marp for VS Code][marp-vscode].
-
-```css
-/* @theme your-theme */
-
-@import 'default';
-
-section {
-  /* Specify slide size */
-  width: 960px;
-  height: 720px;
-}
-
-h1 {
-  font-size: 30px;
-  color: #c33;
-}
-```
-
----
-
-## [Tweak style in Markdown](https://marpit.marp.app/theme-css?id=tweak-style-through-markdown)
-
-`<style>` tag in Markdown will work in the context of theme CSS.
-
-```markdown
----
-theme: default
----
-
-<style>
-section {
-  background: yellow;
-}
-</style>
-
-Re-painted yellow background, ha-ha.
-```
-
-> You can also add custom styling by class like `section.custom-class { ... }`.
-> Apply style through `<!-- _class: custom-class -->`.
-
----
-
-## [Scoped style](https://marpit.marp.app/theme-css?id=scoped-style)
-
-If you want one-shot styling for current page, you can use `<style scoped>`.
-
-```markdown
-<style scoped>
-a {
-  color: green;
-}
-</style>
-
-![Green link!](https://marp.app/)
-```
-
-<style scoped>
-a { color: green; }
-</style>
-
----
-
-# Enjoy writing slides! :v: <!--fit-->
-
-##### ![w:1em h:1em](https://avatars1.githubusercontent.com/u/20685754?v=4)  Marp: Markdown presentation ecosystem — <https://marp.app/>
-
-###### by Marp Team ([@marp-team][marp-team])

@@ -3,6 +3,7 @@ import 'dart:typed_data';
 import 'dart:developer' as developer;
 import 'package:vector_math/vector_math.dart';
 import 'opengl_model.dart';
+import 'opengl_cuboid.dart';
 
 class Sphere {
   // 模型数据
@@ -15,6 +16,7 @@ class Sphere {
   final List<Vector3> instanceVelocity = [];
   final List<double> instanceScale = [];
   final List<int> instanceFlag = [];
+  final List<double> instanceMass = [];
 
   factory Sphere(gl, {int precision = 48}) {
     // 顶点数据：生成球体
@@ -142,6 +144,7 @@ class Sphere {
     instanceVelocity.add(Vector3(0.0, 0.0, 0.0));
     instanceScale.add(1.0);
     instanceFlag.add(2);
+    instanceMass.add(1.0);
   }
 
   render(gl) {
@@ -151,9 +154,6 @@ class Sphere {
     }
     // 模型数据
     gl.bindVertexArray(vao);
-    gl.bindBuffer(gl.ARRAY_BUFFER, vbo[0]);
-    gl.bindBuffer(gl.ARRAY_BUFFER, vbo[1]);
-    gl.bindBuffer(gl.ARRAY_BUFFER, vbo[2]);
     // 解除纹理绑定
     gl.bindTexture(gl.TEXTURE_2D, 0);
     // 实例数据
@@ -192,7 +192,7 @@ class Sphere {
   }
 
   // 碰撞检测
-  bool collision(
+  bool collisionModel(
       int idxBall, // 需要检测碰撞的实例
       ImportedModel model, // 碰撞检测的模型
       int idxBox // 碰撞检测的模型实例
@@ -205,15 +205,67 @@ class Sphere {
     var halfSizeY = model.halfSize.y * model.instanceScale[idxBox];
     var halfSizeZ = model.halfSize.z * model.instanceScale[idxBox];
 
-    if (clampedX < -model.halfSize.x) clampedX = -halfSizeX;
-    if (clampedX > model.halfSize.x) clampedX = halfSizeX;
-    if (clampedY < -model.halfSize.y) clampedY = -halfSizeY;
-    if (clampedY > model.halfSize.y) clampedY = halfSizeY;
-    if (clampedZ < -model.halfSize.z) clampedZ = -halfSizeZ;
-    if (clampedZ > model.halfSize.z) clampedZ = halfSizeZ;
+    if (clampedX < -halfSizeX) clampedX = -halfSizeX;
+    if (clampedX > halfSizeX) clampedX = halfSizeX;
+    if (clampedY < -halfSizeY) clampedY = -halfSizeY;
+    if (clampedY > halfSizeY) clampedY = halfSizeY;
+    if (clampedZ < -halfSizeZ) clampedZ = -halfSizeZ;
+    if (clampedZ > halfSizeZ) clampedZ = halfSizeZ;
+
+    // dp = glm::normalize(location - ball.location);
+
+    // v10 = glm::dot(dp, velocity);
+    // v20 = glm::dot(dp, ball.velocity);
+
+    // v1 = ((mass - ball.mass) * v10 + 2 * ball.mass * v20) / (mass + ball.mass);
+    // v2 = ((ball.mass - mass) * v20 + 2 * mass * v10) / (mass + ball.mass);
+
+    // velocity += (v1 - v10) * dp;
+    // ball.velocity += (v2 - v20) * dp;
 
     diff = Vector3(clampedX, clampedY, clampedZ) - diff;
 
     return diff.length < instanceScale[idxBall];
+  }
+
+  bool collisionCuboid(
+      int idxSphere, // 需要检测碰撞的实例
+      Cuboid cuboid, // 碰撞检测的模型
+      int idxCube) {
+    var diff = instancePosition[idxSphere] - cuboid.instancePosition[idxCube];
+    var clampedX = diff.x;
+    var clampedY = diff.y;
+    var clampedZ = diff.z;
+    var halfSizeX = cuboid.halfSize.x * cuboid.instanceScale[idxCube];
+    var halfSizeY = cuboid.halfSize.y * cuboid.instanceScale[idxCube];
+    var halfSizeZ = cuboid.halfSize.z * cuboid.instanceScale[idxCube];
+
+    if (clampedX < -halfSizeX) clampedX = -halfSizeX;
+    if (clampedX > halfSizeX) clampedX = halfSizeX;
+    if (clampedY < -halfSizeY) clampedY = -halfSizeY;
+    if (clampedY > halfSizeY) clampedY = halfSizeY;
+    if (clampedZ < -halfSizeZ) clampedZ = -halfSizeZ;
+    if (clampedZ > halfSizeZ) clampedZ = halfSizeZ;
+
+    //   dp = glm::normalize(location - ball.location);
+
+    //   v10 = glm::dot(dp, velocity);
+    //   v20 = glm::dot(dp, ball.velocity);
+
+    //   v1 = ((mass - ball.mass) * v10 + 2 * ball.mass * v20) / (mass + ball.mass);
+    //   v2 = ((ball.mass - mass) * v20 + 2 * mass * v10) / (mass + ball.mass);
+
+    //   velocity += (v1 - v10) * dp;
+    //   ball.velocity += (v2 - v20) * dp;
+
+    diff = Vector3(clampedX, clampedY, clampedZ) - diff;
+
+    if(diff.length < instanceScale[idxSphere])
+    {
+      // 发生碰撞，令球体弹开。即 Y 轴速度取反
+      instanceVelocity[idxSphere].y = -instanceVelocity[idxSphere].y;
+    }
+
+    return diff.length < instanceScale[idxSphere];
   }
 }

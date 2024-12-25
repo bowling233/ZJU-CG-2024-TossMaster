@@ -21,6 +21,8 @@ import 'package:syncfusion_flutter_gauges/gauges.dart';
 import 'opengl_utils.dart';
 import 'opengl_model.dart';
 import 'opengl_sphere.dart' as sphere;
+import 'opengl_cuboid.dart' as cuboid;
+import 'opengl_torus.dart' as torus;
 
 vm.Vector3 gravity = vm.Vector3(0.0, -9.8, 0.0);
 
@@ -155,6 +157,13 @@ class _TossMasterState extends State<TossMaster> with WidgetsBindingObserver {
                   var positionDelta =
                       cameraRight * (event.focalPointDelta.dx * 0.01) +
                           cameraUp * (-event.focalPointDelta.dy * 0.01);
+
+                  // 如果物体已经碰撞，则不允许移动 y 轴
+                  if (_cuboid.collisionModel(0, _models[_selectedModelIndex!],
+                          _selectedModelInstanceIndex!) &&
+                      positionDelta.y < 0) {
+                    positionDelta.y = 0;
+                  }
 
                   // 旋转四元数
                   var rotationDelta = vm.Quaternion.axisAngle(cameraUp,
@@ -529,7 +538,7 @@ class _TossMasterState extends State<TossMaster> with WidgetsBindingObserver {
                 });
               },
               min: 0.0,
-              max: 3.0,
+              max: 1.0,
             ),
           ]),
         ]);
@@ -846,6 +855,28 @@ class _TossMasterState extends State<TossMaster> with WidgetsBindingObserver {
                 _gameMode = GameMode.act;
               },
             ),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                //控制是否显示球体、平面
+                ElevatedButton.icon(
+                  icon: const Icon(Icons.circle),
+                  onPressed: () {
+                    _showSphere = !_showSphere;
+                    setState(() {});
+                  },
+                  label: const Text('球体显示'),
+                ),
+                ElevatedButton.icon(
+                  icon: const Icon(Icons.circle),
+                  onPressed: () {
+                    _showCuboid = !_showCuboid;
+                    setState(() {});
+                  },
+                  label: const Text('平板显示'),
+                )
+              ],
+            )
           ],
         );
     }
@@ -1076,6 +1107,9 @@ class _TossMasterState extends State<TossMaster> with WidgetsBindingObserver {
   late int sceneProgram;
   final List<ImportedModel> _models = [];
   late sphere.Sphere _sphere;
+  late cuboid.Cuboid _cuboid;
+  late torus.Torus _torus;
+  bool _showSphere = false, _showCuboid = false, showTorus = false;
   prepareScene() {
     final gl = flutterGlPlugin.gl;
     String version = "300 es";
@@ -1222,6 +1256,14 @@ void main(void)
 
     _sphere = sphere.Sphere(gl);
     _sphere.instantiate();
+    _cuboid = cuboid.Cuboid(gl);
+    _cuboid.instantiate();
+    _cuboid.instantiate();
+    // 设置第二块板子偏移
+    _cuboid.instancePosition[1] += vm.Vector3(0, 0, -50);
+
+    _torus = torus.Torus(gl);
+    _torus.instantiate();
   }
 
   renderScene() {
@@ -1252,14 +1294,17 @@ void main(void)
       model.renderBox(gl);
     }
 
-    if (_controlMode == ControlMode.game) _sphere.render(gl);
+    //if (_controlMode == ControlMode.game) _sphere.render(gl);
+    if (_showSphere) _sphere.render(gl);
+    if (_showCuboid) _cuboid.render(gl);
+    //_torus.render(gl);
   }
 
   // ***************************************************************
   // OpenGL：光照与材质
   // ***************************************************************
   // 当前选择的材质
-  GlMaterial _currentMaterial = GlMaterial.gold;
+  GlMaterial _currentMaterial = GlMaterial.pearl;
   // ADS 光照：环境光、漫反射、镜面反射
   // 环境光
   Color globalColor = Colors.white;
@@ -1400,35 +1445,51 @@ void main(void)
     var dt = currentTime - lastTime;
     lastTime = currentTime;
 
-    if (_gameMode == GameMode.pre) {
-      // 设定球体初始位置
-      var curr = 0;
-      var rMat = vm.Matrix4.identity();
-      rMat.rotate(cameraFront.cross(cameraUp), vm.radians(-35.0));
-      var tmp = vm.Vector3.copy(cameraFront);
-      tmp.scale(5);
-      _sphere.instancePosition[curr] = cameraPos + rMat.transform3(tmp);
-      _sphere.instanceScale[curr] = 1.8;
-    } else if (_gameMode == GameMode.act) {
-      var curr = 0;
-      // 物体运动
-      for (final model in _models) {
-        //model.update(dt, gravity);
-      }
-      _sphere.update(dt, gravity);
+    var curr = 0;
+    switch (_gameMode) {
+      case GameMode.pre:
+        // 球体随相机移动
+        var rMat = vm.Matrix4.identity();
+        rMat.rotate(cameraFront.cross(cameraUp), vm.radians(-35.0));
+        var tmp = vm.Vector3.copy(cameraFront);
+        tmp.scale(5);
+        _sphere.instancePosition[curr] = cameraPos + rMat.transform3(tmp);
+        _sphere.instanceScale[curr] = 1.8;
+        // 物体运动
+        for (var i = 0; i < _models.length; i++) {
+          for (var idxModel = 0;
+              idxModel < _models[i].instancePosition.length;
+              idxModel++) {
+            _cuboid.collisionModel(0, _models[i], idxModel);
+          }
+          //_models[i].update(dt, gravity);
+        }
+        break;
 
-      // 碰撞检测
-      for (var i = 0; i < _models.length; i++) {
-        for (var j = 0; j < _models[i].instancePosition.length; j++) {
-          var curr = 0;
-          if (_sphere.collision(curr, _models[i], j)) {
-            _models[i].instanceFlag[j] = 1;
-            _gameMode = GameMode.over;
-          } else {
-            _models[i].instanceFlag[j] = 0;
+      case GameMode.act:
+        // 球体运动
+        _sphere.update(dt, gravity);
+        for (var i = 0; i < _models.length; i++) {
+          for (var j = 0; j < _models[i].instancePosition.length; j++) {
+            if (_sphere.collisionModel(curr, _models[i], j)) {
+              _models[i].instanceFlag[j] = 1;
+              _gameMode = GameMode.over;
+            } else {
+              _models[i].instanceFlag[j] = 0;
+            }
           }
         }
-      }
+        // 游戏结束：球与板碰撞、球超出视界
+        // if ((showCuboid && _cuboid.collisionSphere(0, _sphere, 0)) ||
+        //if ((_showCuboid && _sphere.collisionCuboid(0, _cuboid, 0)) ||
+        _sphere.collisionCuboid(0, _cuboid, 0);
+        _sphere.collisionCuboid(0, _cuboid, 1);
+        if (((_sphere.instancePosition[0] - cameraPos).length > 500)) {
+          _gameMode = GameMode.over;
+        }
+        break;
+      case GameMode.over:
+        break;
     }
   }
 

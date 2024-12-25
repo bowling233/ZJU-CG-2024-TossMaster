@@ -1,9 +1,10 @@
 import 'dart:typed_data';
 import 'dart:developer';
 import 'package:flutter_gl/native-array/NativeArray.app.dart';
-import 'package:toss_master/opengl_utils.dart';
 import 'package:vector_math/vector_math.dart';
 import 'package:image/image.dart';
+
+enum ImportedModelState { onBoard, inAir }
 
 class ImportedModel {
   // 顶点数据
@@ -25,9 +26,9 @@ class ImportedModel {
   final List<Vector3> instanceVelocity = [];
   final List<Quaternion> instanceRotation = [];
   final List<double> instanceScale = [];
-  // final List<Matrix4> instanceMatrix = [];
   final List<int> instanceFlag = [];
-  final List<Vector3> instanceHalfSize = [];
+  final List<ImportedModelState> instanceState = [];
+  final List<double> instanceMass = [];
 
   factory ImportedModel(
       gl, String objData, Uint8List? texData, Uint8List? gifData) {
@@ -82,8 +83,6 @@ class ImportedModel {
 
     final numVertices = triangleVerts.length ~/ 3;
 
-
-
     // 包围盒计算
     List<double> xVals = [];
     List<double> yVals = [];
@@ -116,21 +115,33 @@ class ImportedModel {
     // 包围盒的顶点数据，按 GL_LINES 绘制
     // 共 12 条边，每条边 2 个顶点，每个顶点 3 个坐标
     List<double> boxVerts = [
-      halfSize.x, halfSize.y, halfSize.z, halfSize.x, halfSize.y, -halfSize.z,// 1
-      halfSize.x, halfSize.y, -halfSize.z, halfSize.x, -halfSize.y, -halfSize.z,// 2
-      halfSize.x, -halfSize.y, -halfSize.z, halfSize.x, -halfSize.y, halfSize.z,// 3
-      halfSize.x, -halfSize.y, halfSize.z, halfSize.x, halfSize.y, halfSize.z,// 4
-      -halfSize.x, halfSize.y, halfSize.z, -halfSize.x, halfSize.y, -halfSize.z,// 5
-      -halfSize.x, halfSize.y, -halfSize.z, -halfSize.x, -halfSize.y, -halfSize.z,// 6
-      -halfSize.x, -halfSize.y, -halfSize.z, -halfSize.x, -halfSize.y, halfSize.z,// 7
-      -halfSize.x, -halfSize.y, halfSize.z, -halfSize.x, halfSize.y, halfSize.z,// 8
-      halfSize.x, halfSize.y, halfSize.z, -halfSize.x, halfSize.y, halfSize.z,// 9
-      halfSize.x, halfSize.y, -halfSize.z, -halfSize.x, halfSize.y, -halfSize.z,// 10
-      halfSize.x, -halfSize.y, -halfSize.z, -halfSize.x, -halfSize.y, -halfSize.z,// 11
-      halfSize.x, -halfSize.y, halfSize.z, -halfSize.x, -halfSize.y, halfSize.z,// 12
+      halfSize.x, halfSize.y, halfSize.z, halfSize.x, halfSize.y,
+      -halfSize.z, // 1
+      halfSize.x, halfSize.y, -halfSize.z, halfSize.x, -halfSize.y,
+      -halfSize.z, // 2
+      halfSize.x, -halfSize.y, -halfSize.z, halfSize.x, -halfSize.y,
+      halfSize.z, // 3
+      halfSize.x, -halfSize.y, halfSize.z, halfSize.x, halfSize.y,
+      halfSize.z, // 4
+      -halfSize.x, halfSize.y, halfSize.z, -halfSize.x, halfSize.y,
+      -halfSize.z, // 5
+      -halfSize.x, halfSize.y, -halfSize.z, -halfSize.x, -halfSize.y,
+      -halfSize.z, // 6
+      -halfSize.x, -halfSize.y, -halfSize.z, -halfSize.x, -halfSize.y,
+      halfSize.z, // 7
+      -halfSize.x, -halfSize.y, halfSize.z, -halfSize.x, halfSize.y,
+      halfSize.z, // 8
+      halfSize.x, halfSize.y, halfSize.z, -halfSize.x, halfSize.y,
+      halfSize.z, // 9
+      halfSize.x, halfSize.y, -halfSize.z, -halfSize.x, halfSize.y,
+      -halfSize.z, // 10
+      halfSize.x, -halfSize.y, -halfSize.z, -halfSize.x, -halfSize.y,
+      -halfSize.z, // 11
+      halfSize.x, -halfSize.y, halfSize.z, -halfSize.x, -halfSize.y,
+      halfSize.z, // 12
     ];
 
-        // 顶点数据：载入 OpenGL
+    // 顶点数据：载入 OpenGL
     final vao = gl.createVertexArray();
     gl.bindVertexArray(vao);
 
@@ -290,12 +301,15 @@ class ImportedModel {
       this.boxVbo);
 
   void instantiate() {
-    instancePosition.add(Vector3(0, 0, 0));
+    instancePosition.add(Vector3(0, 0, -20));
     instanceVelocity.add(Vector3(0, 0, 0));
     instanceRotation.add(Quaternion.identity());
     instanceScale.add(1);
-    if (texture == -1) {
+    instanceMass.add(1.0);
+    instanceState.add(ImportedModelState.inAir);
+    if (texture == null) {
       // 使用材质
+      log('ImportedModel.instantiate() texture == null');
       instanceFlag.add(2);
     } else {
       // 使用纹理
@@ -308,8 +322,7 @@ class ImportedModel {
     if (instancePosition.isEmpty) return;
     // 模型数据
     gl.bindVertexArray(vao);
-    if (texture == -1) {
-      gl.activeTexture(gl.TEXTURE0);
+    if (texture == null) {
       gl.bindTexture(gl.TEXTURE_2D, 0);
     } else {
       gl.activeTexture(gl.TEXTURE0);
@@ -358,8 +371,6 @@ class ImportedModel {
     // 实例化绘制
     gl.lineWidth(2.0);
     gl.drawArraysInstanced(gl.LINES, 0, 24, instancePosition.length);
-    checkOpenGLError(gl);
-    log('[ImportedModel.renderBox()]');
   }
 
   // 实例选择
@@ -369,7 +380,7 @@ class ImportedModel {
   }
 
   void unSelect() {
-    instanceFlag.fillRange(0, instanceFlag.length, texture == -1 ? 2 : 0);
+    instanceFlag.fillRange(0, instanceFlag.length, texture == null ? 2 : 0);
   }
 
   // 模型选中测试
@@ -449,9 +460,11 @@ class ImportedModel {
       tmp.scale(millis / 1000);
       instancePosition[i] += tmp;
       // 速度更新
-      tmp = Vector3.copy(gravity);
-      tmp.scale(millis / 1000);
-      instanceVelocity[i] += tmp;
+      if(instanceState[i] == ImportedModelState.inAir) {
+        tmp = Vector3.copy(gravity);
+        tmp.scale(millis / 1000);
+        instanceVelocity[i] += tmp;
+      }
     }
   }
 }
